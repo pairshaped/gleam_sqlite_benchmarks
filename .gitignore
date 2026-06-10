@@ -1,0 +1,16 @@
+*.beam
+*.ez
+erl_crash.dump
+
+/gleam/build
+/gleam/*.sqlite3
+/gleam/*.sqlite3-*
+/gleam/*_probe.bin
+
+/rust/target
+/rust/*.sqlite3
+/rust/*.sqlite3-*
+/rust/*_probe.bin
+
+/ruby/*.sqlite3
+/ruby/*.sqlite3-*
