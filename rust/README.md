@@ -1,8 +1,9 @@
 # Rust SQLite
 
-This bucket runs the request-shaped SQLite benchmark through two Rust paths:
+This bucket runs the request-shaped SQLite benchmark through several Rust paths:
 
 - `rust_rusqlite/*`: direct `rusqlite` calls.
+- `rust_marmot/*`: generated `rusqlite` calls from colocated `.sql` files.
 - `rust_sqlx/*`: `sqlx` with a `SqlitePool` and `max_connections(5)`.
 - `rust_sqlx_pool1/*`: same SQLx pool path with `max_connections(1)`.
 - `rust_sqlx_conn/*`: SQLx using one acquired pooled connection for the request
@@ -30,6 +31,9 @@ Cases:
 - `rust_rusqlite/app_request/seed_dummy_data`
 - `rust_rusqlite/app_request/admin_item_edit`
 - `rust_rusqlite/app_request/admin_item_update`
+- `rust_marmot/app_request/seed_dummy_data`
+- `rust_marmot/app_request/admin_item_edit`
+- `rust_marmot/app_request/admin_item_update`
 - `rust_sqlx/app_request/seed_dummy_data`
 - `rust_sqlx/app_request/admin_item_edit`
 - `rust_sqlx/app_request/admin_item_update`
@@ -43,6 +47,17 @@ SQLite is configured with WAL, `busy_timeout=5000`, and foreign keys enabled.
 The baseline SQLx pool uses `max_connections(5)`. The `rusqlite` path uses the
 same request-shaped sequence with normal driver calls, not a hot
 prepared-statement loop.
+
+The Marmot path uses SQL files in `src/app_request/sql/` and generated code in
+`src/generated/sql/`. Regenerate it from the sibling Marmot checkout with:
+
+```sh
+cd /Users/daverapin/projects/rust/marmot
+cargo run -- generate \
+  --database /Users/daverapin/projects/gleam/sqlite_tests/rust/rust_benchmark.sqlite3 \
+  --source-root /Users/daverapin/projects/gleam/sqlite_tests/rust/src \
+  --output /Users/daverapin/projects/gleam/sqlite_tests/rust/src/generated/sql
+```
 
 The SQLx variants are included to isolate overhead. The current fastest SQLx
 shape for the read-heavy request is `rust_sqlx_conn/*`, which avoids checking a

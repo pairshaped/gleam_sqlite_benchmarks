@@ -13,16 +13,18 @@ Representative 10,000-request results:
 
 | Runner | `admin_item_edit` | `admin_item_update` |
 | --- | ---: | ---: |
-| Rust `rusqlite` SQLite | 0.67s, 14,884 req/sec | 0.37s, 26,675 req/sec |
-| Rust SQLx SQLite | 4.02s, 2,486 req/sec | 0.90s, 11,122 req/sec |
-| Gleam SQLite (`sqlight`) | 3.43s, 2,915 req/sec | 2.47s, 4,054 req/sec |
-| Ruby ActiveRecord SQLite | 12.35s, 809 req/sec | 3.74s, 2,670 req/sec |
+| Rust `rusqlite` SQLite | 0.69s, 14,529 req/sec | 0.33s, 29,920 req/sec |
+| Rust Marmot-generated `rusqlite` SQLite | 0.95s, 10,559 req/sec | 0.27s, 37,671 req/sec |
+| Rust SQLx SQLite | 4.03s, 2,481 req/sec | 0.78s, 12,886 req/sec |
+| Gleam SQLite (`sqlight`) | 3.49s, 2,863 req/sec | 2.02s, 4,940 req/sec |
+| Gleam Marmot-generated `sqlight` SQLite | 1.81s, 5,536 req/sec | 2.17s, 4,602 req/sec |
+| Ruby ActiveRecord SQLite | 12.34s, 810 req/sec | 3.74s, 2,674 req/sec |
 
 The direct Rust driver row is much faster than the other measured paths for this
 many-small-query SQLite shape.
 
-The SQLx-vs-rusqlite gap is large in this shape: SQLx was about 6.0x slower on
-the read-heavy request and about 2.4x slower on the update request. This is not
+The SQLx-vs-rusqlite gap is large in this shape: SQLx was about 5.9x slower on
+the read-heavy request and about 2.3x slower on the update request. This is not
 from a fake hot prepared-statement loop; both Rust rows use the same
 request-shaped query sequence.
 
@@ -43,8 +45,8 @@ not used for the main cross-language throughput table.
 
 ## Repository Layout
 
-- `gleam/`: Gleam benchmark project, including SQLite and local Postgres through
-  `pog`.
+- `gleam/`: Gleam benchmark project, including raw SQLite, Gleam
+  Marmot-generated SQLite, and local Postgres through `pog`.
 - `rust/`: Rust `rusqlite` and SQLx benchmark.
 - `ruby/`: Ruby ActiveRecord benchmark.
 
@@ -131,9 +133,19 @@ PRAGMA busy_timeout=5000;
 PRAGMA foreign_keys=ON;
 ```
 
-Rust has two primary SQLite paths:
+Gleam has two SQLite paths:
+
+- `app_request/*`: request loop implemented through the existing Erlang FFI
+  calls.
+- `gleam_marmot/app_request/*`: request loop using generated Gleam Marmot
+  functions from the shared SQL files in `rust/src/app_request/sql`.
+  One-column SQL files use `-- returns: ValueRow` so the generated Gleam API
+  shares a single scalar row type.
+
+Rust has three primary SQLite paths:
 
 - `rust_rusqlite/*`: direct `rusqlite` calls in the same request shape.
+- `rust_marmot/*`: generated `rusqlite` calls from colocated `.sql` files.
 - `rust_sqlx/*`: `sqlx` with a `SqlitePool` and `max_connections(5)`.
 
 The Rust runner also includes SQLx variants to isolate pool and connection
@@ -158,14 +170,18 @@ These are representative 10,000-request rows from the M4 MacBook Air run.
 
 | Runner | Case | Items | Time | us/item | Check |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Gleam SQLite | `app_request/admin_item_edit` | 10,000 | 3,430,500us | 343 | 27,395,000 |
-| Gleam SQLite | `app_request/admin_item_update` | 10,000 | 2,466,888us | 246 | 5,550,000 |
-| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_edit` | 10,000 | 671,851us | 67 | 27,395,000 |
-| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_update` | 10,000 | 374,879us | 37 | 5,550,000 |
-| Rust SQLx SQLite | `rust_sqlx/app_request/admin_item_edit` | 10,000 | 4,022,771us | 402 | 27,395,000 |
-| Rust SQLx SQLite | `rust_sqlx/app_request/admin_item_update` | 10,000 | 899,148us | 89 | 5,550,000 |
-| Ruby ActiveRecord SQLite | `active_record/app_request/admin_item_edit` | 10,000 | 12,353,988us | 1,235 | 27,395,000 |
-| Ruby ActiveRecord SQLite | `active_record/app_request/admin_item_update` | 10,000 | 3,744,670us | 374 | 5,550,000 |
+| Gleam SQLite | `app_request/admin_item_edit` | 10,000 | 3,492,963us | 349 | 27,395,000 |
+| Gleam SQLite | `app_request/admin_item_update` | 10,000 | 2,024,260us | 202 | 5,550,000 |
+| Gleam Marmot-generated SQLite | `gleam_marmot/app_request/admin_item_edit` | 10,000 | 1,806,172us | 180 | 27,395,000 |
+| Gleam Marmot-generated SQLite | `gleam_marmot/app_request/admin_item_update` | 10,000 | 2,172,858us | 217 | 5,550,000 |
+| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_edit` | 10,000 | 688,275us | 68 | 27,395,000 |
+| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_update` | 10,000 | 334,227us | 33 | 5,550,000 |
+| Rust Marmot-generated `rusqlite` SQLite | `rust_marmot/app_request/admin_item_edit` | 10,000 | 947,007us | 94 | 27,395,000 |
+| Rust Marmot-generated `rusqlite` SQLite | `rust_marmot/app_request/admin_item_update` | 10,000 | 265,458us | 26 | 5,550,000 |
+| Rust SQLx SQLite | `rust_sqlx/app_request/admin_item_edit` | 10,000 | 4,030,585us | 403 | 27,395,000 |
+| Rust SQLx SQLite | `rust_sqlx/app_request/admin_item_update` | 10,000 | 776,064us | 77 | 5,550,000 |
+| Ruby ActiveRecord SQLite | `active_record/app_request/admin_item_edit` | 10,000 | 12,342,330us | 1,234 | 27,395,000 |
+| Ruby ActiveRecord SQLite | `active_record/app_request/admin_item_update` | 10,000 | 3,739,989us | 373 | 5,550,000 |
 
 The matching checksums are intentional. They make it easier to notice when two
 runners stop doing equivalent work.
@@ -174,13 +190,13 @@ For reference, the local `pog` run produced two shapes:
 
 | Runner | Case | Items | Time | us/item | Check |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Gleam Postgres (`pog`) | `app_request/admin_item_edit` | 10,000 | 22,012,295us | 2,201 | 27,395,000 |
-| Gleam Postgres (`pog`) | `batched_request/admin_item_edit` | 10,000 | 5,517,460us | 551 | 27,395,000 |
-| Gleam Postgres (`pog`) | `app_request/admin_item_update` | 10,000 | 4,204,633us | 420 | 5,550,000 |
-| Gleam Postgres (`pog`) | `batched_request/admin_item_update` | 10,000 | 2,272,807us | 227 | 5,550,000 |
+| Gleam Postgres (`pog`) | `app_request/admin_item_edit` | 10,000 | 12,894,179us | 1,289 | 27,395,000 |
+| Gleam Postgres (`pog`) | `batched_request/admin_item_edit` | 10,000 | 4,504,108us | 450 | 27,395,000 |
+| Gleam Postgres (`pog`) | `app_request/admin_item_update` | 10,000 | 3,941,688us | 394 | 5,550,000 |
+| Gleam Postgres (`pog`) | `batched_request/admin_item_update` | 10,000 | 2,275,080us | 227 | 5,550,000 |
 
-The batched rows are much faster than the chatty rows in this run: about 4.0x
-faster for the read-heavy request and about 1.9x faster for the update request.
+The batched rows are much faster than the chatty rows in this run: about 2.9x
+faster for the read-heavy request and about 1.7x faster for the update request.
 That matches the expected direction. It also shows why the batched rows are
 useful when reasoning about round-trip overhead.
 
@@ -195,12 +211,12 @@ MacBook Air run, probe overhead was significant:
 
 | Runner | Case | Plain | Probed | Slowdown |
 | --- | --- | ---: | ---: | ---: |
-| Gleam SQLite | `admin_item_edit` | 3,430,500us | 10,574,763us | 3.1x |
-| Gleam SQLite | `admin_item_update` | 2,466,888us | 4,796,053us | 1.9x |
-| Gleam Postgres (`pog`) | `app_request/admin_item_edit` | 22,012,295us | 27,223,693us | 1.2x |
-| Gleam Postgres (`pog`) | `batched_request/admin_item_edit` | 5,517,460us | 8,394,702us | 1.5x |
-| Gleam Postgres (`pog`) | `app_request/admin_item_update` | 4,204,633us | 8,396,235us | 2.0x |
-| Gleam Postgres (`pog`) | `batched_request/admin_item_update` | 2,272,807us | 4,349,497us | 1.9x |
+| Gleam SQLite | `admin_item_edit` | 3,492,963us | 10,112,099us | 2.9x |
+| Gleam SQLite | `admin_item_update` | 2,024,260us | 4,685,758us | 2.3x |
+| Gleam Postgres (`pog`) | `app_request/admin_item_edit` | 12,894,179us | 25,670,143us | 2.0x |
+| Gleam Postgres (`pog`) | `batched_request/admin_item_edit` | 4,504,108us | 6,970,838us | 1.5x |
+| Gleam Postgres (`pog`) | `app_request/admin_item_update` | 3,941,688us | 8,599,266us | 2.2x |
+| Gleam Postgres (`pog`) | `batched_request/admin_item_update` | 2,275,080us | 4,725,647us | 2.1x |
 
 ## Rust SQLx Variants
 
@@ -213,19 +229,19 @@ but it still did not catch `rusqlite`.
 
 | Runner | Case | Items | Time | us/item | Check |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_edit` | 10,000 | 708,197us | 70 | 27,395,000 |
-| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_update` | 10,000 | 324,748us | 32 | 5,550,000 |
-| Rust SQLx pool 5 | `rust_sqlx/app_request/admin_item_edit` | 10,000 | 4,171,184us | 417 | 27,395,000 |
-| Rust SQLx pool 5 | `rust_sqlx/app_request/admin_item_update` | 10,000 | 813,700us | 81 | 5,550,000 |
-| Rust SQLx pool 1 | `rust_sqlx_pool1/app_request/admin_item_edit` | 10,000 | 6,106,208us | 610 | 27,395,000 |
-| Rust SQLx pool 1 | `rust_sqlx_pool1/app_request/admin_item_update` | 10,000 | 780,602us | 78 | 5,550,000 |
-| Rust SQLx acquired connection | `rust_sqlx_conn/app_request/admin_item_edit` | 10,000 | 1,637,995us | 163 | 27,395,000 |
-| Rust SQLx acquired connection | `rust_sqlx_conn/app_request/admin_item_update` | 10,000 | 606,945us | 60 | 5,550,000 |
-| Rust SQLx direct connection | `rust_sqlx_direct/app_request/admin_item_edit` | 10,000 | 1,692,974us | 169 | 27,395,000 |
-| Rust SQLx direct connection | `rust_sqlx_direct/app_request/admin_item_update` | 10,000 | 641,832us | 64 | 5,550,000 |
-| Rust SQLx tuned direct connection | `rust_sqlx_direct_tuned/app_request/admin_item_edit` | 10,000 | 1,712,228us | 171 | 27,395,000 |
-| Rust SQLx tuned direct connection | `rust_sqlx_direct_tuned/app_request/admin_item_update` | 10,000 | 650,273us | 65 | 5,550,000 |
-| Rust SQLx manual transaction | `rust_sqlx_manual_tx/app_request/admin_item_update` | 10,000 | 689,775us | 68 | 5,550,000 |
+| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_edit` | 10,000 | 688,275us | 68 | 27,395,000 |
+| Rust `rusqlite` SQLite | `rust_rusqlite/app_request/admin_item_update` | 10,000 | 334,227us | 33 | 5,550,000 |
+| Rust SQLx pool 5 | `rust_sqlx/app_request/admin_item_edit` | 10,000 | 4,030,585us | 403 | 27,395,000 |
+| Rust SQLx pool 5 | `rust_sqlx/app_request/admin_item_update` | 10,000 | 776,064us | 77 | 5,550,000 |
+| Rust SQLx pool 1 | `rust_sqlx_pool1/app_request/admin_item_edit` | 10,000 | 5,877,427us | 587 | 27,395,000 |
+| Rust SQLx pool 1 | `rust_sqlx_pool1/app_request/admin_item_update` | 10,000 | 760,092us | 76 | 5,550,000 |
+| Rust SQLx acquired connection | `rust_sqlx_conn/app_request/admin_item_edit` | 10,000 | 1,449,535us | 144 | 27,395,000 |
+| Rust SQLx acquired connection | `rust_sqlx_conn/app_request/admin_item_update` | 10,000 | 594,134us | 59 | 5,550,000 |
+| Rust SQLx direct connection | `rust_sqlx_direct/app_request/admin_item_edit` | 10,000 | 1,508,306us | 150 | 27,395,000 |
+| Rust SQLx direct connection | `rust_sqlx_direct/app_request/admin_item_update` | 10,000 | 598,480us | 59 | 5,550,000 |
+| Rust SQLx tuned direct connection | `rust_sqlx_direct_tuned/app_request/admin_item_edit` | 10,000 | 1,464,903us | 146 | 27,395,000 |
+| Rust SQLx tuned direct connection | `rust_sqlx_direct_tuned/app_request/admin_item_update` | 10,000 | 617,794us | 61 | 5,550,000 |
+| Rust SQLx manual transaction | `rust_sqlx_manual_tx/app_request/admin_item_update` | 10,000 | 648,096us | 64 | 5,550,000 |
 
 The result is fairly clear:
 
@@ -236,8 +252,8 @@ The result is fairly clear:
 - SQLx worker/cache tuning did not help.
 - Manual `BEGIN`/`COMMIT` did not help the update request.
 
-The best SQLx read-heavy row remained about 2.3x slower than `rusqlite`. The
-best SQLx update row remained about 1.9x slower than `rusqlite`.
+The best SQLx read-heavy row remained about 2.1x slower than `rusqlite`. The
+best SQLx update row remained about 1.8x slower than `rusqlite`.
 
 ## How To Reproduce
 
@@ -247,6 +263,13 @@ Gleam SQLite:
 cd gleam
 gleam deps download
 gleam run 10000
+```
+
+Regenerate the Gleam Marmot module after changing SQL files:
+
+```sh
+cd gleam
+gleam run -m marmot
 ```
 
 Gleam Postgres:
@@ -336,6 +359,7 @@ The cleanup pass used these checks:
 ```sh
 cd gleam && gleam format src test
 cd gleam && gleam test
+cd gleam && gleam run -m marmot
 cd gleam && gleam run 100
 cd gleam && gleam run -m postgres_tests 100
 cd gleam && gleam run 10000

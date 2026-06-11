@@ -8,6 +8,10 @@ use std::io;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+mod generated;
+
+use generated::sql::app_request_sql;
+
 type BenchResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 const DEFAULT_ROW_COUNT: i64 = 10_000;
@@ -28,6 +32,17 @@ async fn main() -> BenchResult<()> {
     })?;
     measure_sync("rust_rusqlite/app_request/admin_item_update", rows, || {
         admin_item_update_requests_rusqlite(rows)
+    })?;
+
+    remove_sqlite_files(DB_PATH)?;
+    measure_sync("rust_marmot/app_request/seed_dummy_data", 1, || {
+        seed_app_request_data_rusqlite()
+    })?;
+    measure_sync("rust_marmot/app_request/admin_item_edit", rows, || {
+        admin_item_edit_requests_marmot(rows)
+    })?;
+    measure_sync("rust_marmot/app_request/admin_item_update", rows, || {
+        admin_item_update_requests_marmot(rows)
     })?;
 
     remove_sqlite_files(DB_PATH)?;
@@ -628,6 +643,79 @@ fn admin_item_update_request_rusqlite(
         "update app_events set counter = counter + 1, name = ? where id = ?",
         rusqlite::params![format!("Updated Event {sequence}"), event_id],
     )?;
+    tx.commit()?;
+    Ok(check + event_id)
+}
+
+fn admin_item_edit_requests_marmot(rows: i64) -> BenchResult<i64> {
+    let conn = open_rusqlite_connection()?;
+    let mut check = 0;
+    for i in 1..=rows {
+        let event_id = ((i - 1) % 100) + 1;
+        check += admin_item_edit_request_marmot(&conn, event_id)?;
+    }
+    Ok(check)
+}
+
+fn admin_item_edit_request_marmot(conn: &Connection, event_id: i64) -> BenchResult<i64> {
+    let mut check = 0;
+    check += app_request_sql::get_user_id_one(conn, 1_i64)?;
+    check += app_request_sql::get_club_id_by_subdomain_one(conn, "demo")?;
+    check += app_request_sql::get_event_id_one(conn, 418_i64, event_id)?;
+    check += app_request_sql::count_sponsors_one(conn, 418_i64)?;
+    check += app_request_sql::count_tags_one(conn, 418_i64)?;
+    check += app_request_sql::count_taxes_one(conn, "ON")?;
+    check += app_request_sql::sum_parent_chain_one(conn, 418_i64)?;
+    check += app_request_sql::count_fees_one(conn, 418_i64, 411_i64, 403_i64, 1_i64)?;
+    check += app_request_sql::count_products_one(conn, 418_i64, 1_i64, "addon", "both")?;
+    check += app_request_sql::count_addons_one(conn, event_id, "Event")?;
+
+    for id in [1_i64, 2_i64] {
+        check += app_request_sql::get_fee_id_one(conn, id)?;
+    }
+    for id in [403_i64, 418_i64] {
+        check += app_request_sql::get_club_id_one(conn, id)?;
+    }
+    check += app_request_sql::get_product_id_one(conn, 1_i64)?;
+
+    check += app_request_sql::count_custom_fields_one(conn, 418_i64)?;
+    check += app_request_sql::count_event_custom_fields_one(conn, event_id)?;
+    check += app_request_sql::count_custom_fields_one(conn, 418_i64)?;
+    check += app_request_sql::count_discounts_one(conn, 418_i64, 1_i64)?;
+    check += app_request_sql::count_discount_items_one(conn, event_id, "Event")?;
+    check += app_request_sql::count_discounts_one(conn, 418_i64, 1_i64)?;
+    check += app_request_sql::get_branding_palette_id_one(conn, 1_i64)?;
+    check += app_request_sql::count_admin_alerts_one(conn, "Canada", "club")?;
+    check += app_request_sql::count_config_problems_one(conn, 418_i64, 0_i64)?;
+    check += app_request_sql::count_events_one(conn, 418_i64)?;
+    check += app_request_sql::get_event_counter_one(conn, event_id)?;
+    Ok(check)
+}
+
+fn admin_item_update_requests_marmot(rows: i64) -> BenchResult<i64> {
+    let mut conn = open_rusqlite_connection()?;
+    let mut check = 0;
+    for i in 1..=rows {
+        let event_id = ((i - 1) % 100) + 1;
+        check += admin_item_update_request_marmot(&mut conn, i, event_id)?;
+    }
+    Ok(check)
+}
+
+fn admin_item_update_request_marmot(
+    conn: &mut Connection,
+    sequence: i64,
+    event_id: i64,
+) -> BenchResult<i64> {
+    let tx = conn.transaction()?;
+    let mut check = 0;
+    check += app_request_sql::get_user_id_one(&tx, 1_i64)?;
+    check += app_request_sql::get_club_id_by_subdomain_one(&tx, "demo")?;
+    check += app_request_sql::get_event_id_one(&tx, 418_i64, event_id)?;
+    check += app_request_sql::count_addons_one(&tx, event_id, "Event")?;
+    check += app_request_sql::count_discount_items_one(&tx, event_id, "Event")?;
+    check += app_request_sql::count_tags_one(&tx, 418_i64)?;
+    app_request_sql::update_event(&tx, format!("Updated Event {sequence}"), event_id)?;
     tx.commit()?;
     Ok(check + event_id)
 }

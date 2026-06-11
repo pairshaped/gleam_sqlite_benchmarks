@@ -2,7 +2,8 @@
 
 This bucket runs the request-shaped benchmark through:
 
-- `sqlight` for SQLite
+- raw `sqlight`/esqlite FFI calls for SQLite
+- Gleam Marmot-generated `sqlight` functions for SQLite
 - `pog` for local Postgres
 
 Run SQLite:
@@ -11,6 +12,23 @@ Run SQLite:
 gleam deps download
 gleam run 10000
 ```
+
+The SQLite runner emits:
+
+- `app_request/*`: the current FFI-backed SQLite request path.
+- `gleam_marmot/app_request/*`: generated functions from the shared SQL files
+  under `../rust/src/app_request/sql`.
+- `probed_app_request/*`: the FFI-backed SQLite path with scheduler, sendfile,
+  and read-file probes enabled.
+
+Regenerate the Gleam Marmot module after changing the shared SQL files:
+
+```sh
+gleam run -m marmot
+```
+
+The shared one-column SQL files use `-- returns: ValueRow` so generated Gleam
+functions return the same row type for scalar values.
 
 Run the Postgres cases:
 
@@ -43,5 +61,5 @@ Both runners print:
 case,items,micros,us_per_item,check
 ```
 
-Both runners print primary throughput rows without probes, then `probed_*` rows
-with scheduler, sendfile, and read-file probes enabled.
+The SQLite runner prints primary throughput rows without probes, then `probed_*`
+rows with scheduler, sendfile, and read-file probes enabled.

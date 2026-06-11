@@ -1,3 +1,4 @@
+import generated/sql/app_request_sql
 import gleam/int
 import gleam/io
 import gleam/list
@@ -92,6 +93,24 @@ pub fn main() -> Nil {
         )
 
         use _ <- result.try(
+          measure("gleam_marmot/app_request/seed_dummy_data", 1, fn() {
+            seed_app_request_data(conn)
+          }),
+        )
+
+        use _ <- result.try(
+          measure("gleam_marmot/app_request/admin_item_edit", rows, fn() {
+            app_admin_item_edit_requests_marmot(conn, rows)
+          }),
+        )
+
+        use _ <- result.try(
+          measure("gleam_marmot/app_request/admin_item_update", rows, fn() {
+            app_admin_item_update_requests_marmot(conn, rows)
+          }),
+        )
+
+        use _ <- result.try(
           measure_with_probes("probed_app_request/seed_dummy_data", 1, fn() {
             seed_app_request_data(conn)
           }),
@@ -124,6 +143,272 @@ pub fn main() -> Nil {
       }
     }
   }
+}
+
+fn app_admin_item_edit_requests_marmot(
+  conn: sqlight.Connection,
+  rows: Int,
+) -> Result(Int, sqlight.Error) {
+  app_request_loop_marmot(conn, rows, app_admin_item_edit_request_marmot)
+}
+
+fn app_admin_item_update_requests_marmot(
+  conn: sqlight.Connection,
+  rows: Int,
+) -> Result(Int, sqlight.Error) {
+  app_request_loop_marmot(conn, rows, app_admin_item_update_request_marmot)
+}
+
+fn app_request_loop_marmot(
+  conn: sqlight.Connection,
+  rows: Int,
+  work: fn(sqlight.Connection, Int, Int) -> Result(Int, sqlight.Error),
+) -> Result(Int, sqlight.Error) {
+  app_request_loop_marmot_go(conn, rows, work, 1, 0)
+}
+
+fn app_request_loop_marmot_go(
+  conn: sqlight.Connection,
+  rows: Int,
+  work: fn(sqlight.Connection, Int, Int) -> Result(Int, sqlight.Error),
+  i: Int,
+  check: Int,
+) -> Result(Int, sqlight.Error) {
+  case i > rows {
+    True -> Ok(check)
+    False -> {
+      let event_id = result.unwrap(int.modulo(i - 1, 100), or: 0) + 1
+      use request_check <- result.try(work(conn, i, event_id))
+      app_request_loop_marmot_go(conn, rows, work, i + 1, check + request_check)
+    }
+  }
+}
+
+fn app_admin_item_edit_request_marmot(
+  conn: sqlight.Connection,
+  _i: Int,
+  event_id: Int,
+) -> Result(Int, sqlight.Error) {
+  use user_id <- result.try(value(app_request_sql.get_user_id(db: conn, id: 1)))
+  use club_id <- result.try(
+    value(app_request_sql.get_club_id_by_subdomain(db: conn, subdomain: "demo")),
+  )
+  use event <- result.try(
+    value(app_request_sql.get_event_id(
+      db: conn,
+      club_id: 418,
+      event_id: event_id,
+    )),
+  )
+  use sponsors <- result.try(
+    value(app_request_sql.count_sponsors(db: conn, club_id: 418)),
+  )
+  use tags <- result.try(
+    value(app_request_sql.count_tags(db: conn, club_id: 418)),
+  )
+  use taxes <- result.try(
+    value(app_request_sql.count_taxes(db: conn, province: "ON")),
+  )
+  use parents <- result.try(
+    value(app_request_sql.sum_parent_chain(db: conn, id: 418)),
+  )
+  use fees <- result.try(
+    value(app_request_sql.count_fees(
+      db: conn,
+      club_id: 418,
+      parent_id: 411,
+      grandparent_id: "403",
+      active: 1,
+    )),
+  )
+  use products <- result.try(
+    value(app_request_sql.count_products(
+      db: conn,
+      club_id: 418,
+      active: 1,
+      product_type_1: "addon",
+      product_type_2: "both",
+    )),
+  )
+  use addons <- result.try(
+    value(app_request_sql.count_addons(
+      db: conn,
+      event_id: event_id,
+      addonable_type: "Event",
+    )),
+  )
+  use fee_1 <- result.try(value(app_request_sql.get_fee_id(db: conn, id: 1)))
+  use root_club <- result.try(
+    value(app_request_sql.get_club_id(db: conn, id: 403)),
+  )
+  use leaf_club <- result.try(
+    value(app_request_sql.get_club_id(db: conn, id: 418)),
+  )
+  use product <- result.try(
+    value(app_request_sql.get_product_id(db: conn, id: 1)),
+  )
+  use fee_2 <- result.try(value(app_request_sql.get_fee_id(db: conn, id: 2)))
+  use custom_fields_1 <- result.try(
+    value(app_request_sql.count_custom_fields(db: conn, club_id: 418)),
+  )
+  use event_custom_fields <- result.try(
+    value(app_request_sql.count_event_custom_fields(
+      db: conn,
+      event_id: event_id,
+    )),
+  )
+  use custom_fields_2 <- result.try(
+    value(app_request_sql.count_custom_fields(db: conn, club_id: 418)),
+  )
+  use discounts_1 <- result.try(
+    value(app_request_sql.count_discounts(db: conn, club_id: 418, active: 1)),
+  )
+  use discount_items <- result.try(
+    value(app_request_sql.count_discount_items(
+      db: conn,
+      event_id: event_id,
+      item_type: "Event",
+    )),
+  )
+  use discounts_2 <- result.try(
+    value(app_request_sql.count_discounts(db: conn, club_id: 418, active: 1)),
+  )
+  use palette <- result.try(
+    value(app_request_sql.get_branding_palette_id(db: conn, id: 1)),
+  )
+  use alerts <- result.try(
+    value(app_request_sql.count_admin_alerts(
+      db: conn,
+      country: "Canada",
+      club_type: "club",
+    )),
+  )
+  use config_problems <- result.try(
+    value(app_request_sql.count_config_problems(
+      db: conn,
+      club_id: 418,
+      ignored: 0,
+    )),
+  )
+  use events <- result.try(
+    value(app_request_sql.count_events(db: conn, club_id: 418)),
+  )
+  use counter <- result.try(
+    value(app_request_sql.get_event_counter(db: conn, event_id: event_id)),
+  )
+
+  Ok(
+    user_id
+    + club_id
+    + event
+    + sponsors
+    + tags
+    + taxes
+    + parents
+    + fees
+    + products
+    + addons
+    + fee_1
+    + root_club
+    + leaf_club
+    + product
+    + fee_2
+    + custom_fields_1
+    + event_custom_fields
+    + custom_fields_2
+    + discounts_1
+    + discount_items
+    + discounts_2
+    + palette
+    + alerts
+    + config_problems
+    + events
+    + counter,
+  )
+}
+
+fn app_admin_item_update_request_marmot(
+  conn: sqlight.Connection,
+  i: Int,
+  event_id: Int,
+) -> Result(Int, sqlight.Error) {
+  case sqlight.exec("begin transaction;", on: conn) {
+    Error(error) -> Error(error)
+    Ok(_) -> {
+      let result = {
+        use check <- result.try(app_admin_item_update_checks_marmot(
+          conn,
+          event_id,
+        ))
+        use _ <- result.try(app_request_sql.update_event(
+          db: conn,
+          name: "Updated Event " <> int.to_string(i),
+          event_id: event_id,
+        ))
+        Ok(check + event_id)
+      }
+
+      case result {
+        Ok(check) ->
+          case sqlight.exec("commit;", on: conn) {
+            Ok(_) -> Ok(check)
+            Error(error) -> Error(error)
+          }
+
+        Error(error) -> {
+          let _ = sqlight.exec("rollback;", on: conn)
+          Error(error)
+        }
+      }
+    }
+  }
+}
+
+fn app_admin_item_update_checks_marmot(
+  conn: sqlight.Connection,
+  event_id: Int,
+) -> Result(Int, sqlight.Error) {
+  use user_id <- result.try(value(app_request_sql.get_user_id(db: conn, id: 1)))
+  use club_id <- result.try(
+    value(app_request_sql.get_club_id_by_subdomain(db: conn, subdomain: "demo")),
+  )
+  use event <- result.try(
+    value(app_request_sql.get_event_id(
+      db: conn,
+      club_id: 418,
+      event_id: event_id,
+    )),
+  )
+  use addons <- result.try(
+    value(app_request_sql.count_addons(
+      db: conn,
+      event_id: event_id,
+      addonable_type: "Event",
+    )),
+  )
+  use discount_items <- result.try(
+    value(app_request_sql.count_discount_items(
+      db: conn,
+      event_id: event_id,
+      item_type: "Event",
+    )),
+  )
+  use tags <- result.try(
+    value(app_request_sql.count_tags(db: conn, club_id: 418)),
+  )
+  Ok(user_id + club_id + event + addons + discount_items + tags)
+}
+
+fn value(
+  query: Result(List(app_request_sql.ValueRow), sqlight.Error),
+) -> Result(Int, sqlight.Error) {
+  query
+  |> result.map(fn(rows) {
+    case rows {
+      [row, ..] -> row.value
+      [] -> 0
+    }
+  })
 }
 
 fn measure_read_file_baseline() -> Nil {

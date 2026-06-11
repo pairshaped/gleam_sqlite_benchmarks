@@ -3,9 +3,10 @@
 This repo compares one synthetic but app-shaped SQLite workload across three
 language buckets:
 
-- [gleam/](gleam/): Gleam on BEAM with `sqlight`, plus local Postgres through
-  `pog`.
-- [rust/](rust/): Rust with `rusqlite` and `sqlx` against SQLite.
+- [gleam/](gleam/): Gleam on BEAM with `sqlight`, Gleam Marmot-generated
+  `sqlight`, plus local Postgres through `pog`.
+- [rust/](rust/): Rust with hand-written `rusqlite`, Marmot-generated
+  `rusqlite`, and `sqlx` against SQLite.
 - [ruby/](ruby/): Ruby with ActiveRecord and SQLite.
 
 The benchmark intentionally avoids real application data. The schema, rows, and
@@ -20,7 +21,8 @@ MacBook Air.
 
 - [Report](REPORT.md): TLDR, result tables, caveats, and reproduction commands.
 - [Gleam runner](gleam/README.md): `sqlight` and `pog` commands and defaults.
-- [Rust runner](rust/README.md): `rusqlite` and SQLx commands.
+- [Rust runner](rust/README.md): hand-written `rusqlite`, Marmot-generated
+  `rusqlite`, and SQLx commands.
 - [Ruby runner](ruby/README.md): ActiveRecord command and ORM notes.
 
 ## What Runs
@@ -39,8 +41,10 @@ The main cases are:
 - `app_request/admin_item_update`: a short transaction with a few reads and one
   row update.
 
-The Gleam runners print primary throughput rows without probes, then `probed_*`
-rows with scheduler, `file:sendfile/2`, and `file:read_file/1` probes enabled.
+The Gleam SQLite runner prints raw FFI-backed `app_request/*` rows,
+`gleam_marmot/app_request/*` rows generated from the shared SQL files, then
+`probed_*` rows with scheduler, `file:sendfile/2`, and `file:read_file/1`
+probes enabled.
 
 ## Run Gleam SQLite
 
@@ -93,8 +97,9 @@ cargo run --release --quiet -- 10000
 
 Use release mode. Debug-mode Rust numbers are not useful for this comparison.
 The Rust runner prints both `rust_rusqlite/*` and `rust_sqlx/*` rows. The
-`rusqlite` rows use the same request shape with normal driver calls, not a hot
-prepared-statement loop.
+`rust_marmot/*` rows use generated `rusqlite` functions from colocated SQL
+files. The `rusqlite` rows use the same request shape with normal driver calls,
+not a hot prepared-statement loop.
 
 ## Run Ruby ActiveRecord
 
@@ -114,7 +119,9 @@ only for schema and seed setup.
 
 The useful knobs are in the seed and request functions:
 
-- Gleam SQLite: `gleam/src/sqlite_tests_ffi.erl`
+- Gleam SQLite raw FFI path: `gleam/src/sqlite_tests_ffi.erl`
+- Shared Marmot SQL files: `rust/src/app_request/sql`
+- Gleam Marmot runner: `gleam/src/sqlite_tests.gleam`
 - Gleam Postgres: `gleam/src/postgres_tests_ffi.erl`
 - Rust SQLx: `rust/src/main.rs`
 - Ruby ActiveRecord: `ruby/benchmark.rb`

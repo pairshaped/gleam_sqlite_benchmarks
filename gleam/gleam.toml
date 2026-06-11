@@ -20,3 +20,9 @@ pog = ">= 4.1.0 and < 5.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
+marmot = { path = "../../marmot" }
+
+[tools.marmot]
+database = "sqlite_tests_benchmark.sqlite3"
+sql_dir = "../rust/src"
+output = "src/generated/sql"
