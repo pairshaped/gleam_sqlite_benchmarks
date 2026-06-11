@@ -74,6 +74,8 @@ pub fn main() -> Nil {
       measure_read_file_baseline()
 
       let benchmark = {
+        use _ <- result.try(configure_connection(conn))
+
         use _ <- result.try(
           measure("app_request/seed_dummy_data", 1, fn() {
             seed_app_request_data(conn)
@@ -143,6 +145,16 @@ pub fn main() -> Nil {
       }
     }
   }
+}
+
+fn configure_connection(
+  conn: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
+  use _ <- result.try(sqlight.exec("pragma journal_mode = WAL;", on: conn))
+  use _ <- result.try(sqlight.exec("pragma synchronous = NORMAL;", on: conn))
+  use _ <- result.try(sqlight.exec("pragma busy_timeout = 5000;", on: conn))
+  use _ <- result.try(sqlight.exec("pragma foreign_keys = ON;", on: conn))
+  Ok(Nil)
 }
 
 fn app_admin_item_edit_requests_marmot(

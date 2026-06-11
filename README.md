@@ -14,8 +14,8 @@ names are synthetic. The request shapes are based on production-style app
 requests: many small indexed reads, a recursive parent lookup, and a short save
 transaction.
 
-See [REPORT.md](REPORT.md) for findings and representative numbers from an M4
-MacBook Air.
+See [REPORT.md](REPORT.md) for findings, hardware notes, and representative
+numbers.
 
 ## Docs
 
@@ -114,6 +114,72 @@ asdf exec bundle exec ruby benchmark.rb 10000
 ActiveRecord logging and verbose query logs are disabled. The benchmark uses
 ActiveRecord models and relations for the measured request work. Raw SQL is used
 only for schema and seed setup.
+
+## Run In Docker
+
+The Docker image is meant for a quiet Linux box. It installs the language
+toolchains, clones the Marmot generators, regenerates the benchmark bindings,
+builds the runners, starts local Postgres, and runs each suite sequentially.
+
+```sh
+DOCKER_BUILDKIT=1 docker build --ssh default \
+  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
+  -f docker/bench.Dockerfile \
+  -t sqlite-tests-bench .
+
+docker run --rm \
+  -v "$PWD/benchmark-results:/app/benchmark-results" \
+  -e RUNS=5 \
+  sqlite-tests-bench 10000
+```
+
+The build clones the Marmot generators from GitHub:
+
+- `git@github.com:pairshaped/marmot.git`
+- `git@github.com:pairshaped/marmot-rust.git`
+
+If you want to use HTTPS instead, override the repo args:
+
+```sh
+DOCKER_BUILDKIT=1 docker build \
+  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
+  --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
+  --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
+  -f docker/bench.Dockerfile \
+  -t sqlite-tests-bench .
+```
+
+Use `GLEAM_MARMOT_REF` and `RUST_MARMOT_REF` build args to test branches or
+tags. Results are written under `benchmark-results/`, including raw CSV files,
+machine metadata, and a median summary.
+
+For a dedicated Debian box, SSH in with agent forwarding, clone this repo, and
+run the same commands there:
+
+```sh
+ssh -A <user>@158.69.26.105
+sudo apt update
+sudo apt install -y docker.io git openssh-client
+# If your user cannot access Docker yet, either prefix docker commands with
+# sudo or run: sudo usermod -aG docker "$USER" && newgrp docker
+git clone git@github.com:pairshaped/gleam_sqlite_benchmarks.git
+cd gleam_sqlite_benchmarks
+DOCKER_BUILDKIT=1 docker build --ssh default \
+  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
+  -f docker/bench.Dockerfile \
+  -t sqlite-tests-bench .
+docker run --rm \
+  -v "$PWD/benchmark-results:/app/benchmark-results" \
+  -e RUNS=5 \
+  sqlite-tests-bench 10000
+```
+
+The dedicated server used for the Linux run:
+
+- OS: Debian GNU/Linux 13 (trixie)
+- CPU: AMD Ryzen 7 9700X, 8 cores / 16 threads
+- Memory: 62 GiB
+- Architecture: x86_64
 
 ## Change the Shape
 

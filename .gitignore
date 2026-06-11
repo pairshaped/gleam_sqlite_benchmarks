@@ -14,3 +14,5 @@ erl_crash.dump
 
 /ruby/*.sqlite3
 /ruby/*.sqlite3-*
+
+/benchmark-results

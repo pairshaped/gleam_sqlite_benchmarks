@@ -100,6 +100,7 @@ def main
   ActiveRecord::Base.logger = nil
   ActiveRecord.verbose_query_logs = false if ActiveRecord.respond_to?(:verbose_query_logs=)
   establish_benchmark_connection
+  configure_app_connection
 
   puts "case,items,micros,us_per_item,check"
 
@@ -164,6 +165,7 @@ end
 def configure_app_connection
   connection = ActiveRecord::Base.connection
   connection.execute("PRAGMA journal_mode=WAL")
+  connection.execute("PRAGMA synchronous=NORMAL")
   connection.execute("PRAGMA busy_timeout=5000")
   connection.execute("PRAGMA foreign_keys=ON")
   verify_app_pragmas(connection)
@@ -171,10 +173,12 @@ end
 
 def verify_app_pragmas(connection)
   journal_mode = connection.select_value("PRAGMA journal_mode").to_s
+  synchronous = connection.select_value("PRAGMA synchronous").to_i
   busy_timeout = connection.select_value("PRAGMA busy_timeout").to_i
   foreign_keys = connection.select_value("PRAGMA foreign_keys").to_i
 
   raise "expected WAL journal mode, got #{journal_mode.inspect}" unless journal_mode == "wal"
+  raise "expected synchronous=1, got #{synchronous}" unless synchronous == 1
   raise "expected busy_timeout=5000, got #{busy_timeout}" unless busy_timeout == 5000
   raise "expected foreign_keys=1, got #{foreign_keys}" unless foreign_keys == 1
 end

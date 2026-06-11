@@ -1,5 +1,7 @@
 use rusqlite::Connection;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{
+    SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous,
+};
 use sqlx::Connection as SqlxConnection;
 use sqlx::SqliteConnection;
 use std::error::Error;
@@ -227,6 +229,7 @@ fn sqlx_connect_options() -> Result<SqliteConnectOptions, sqlx::Error> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite://{DB_PATH}"))?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
         .busy_timeout(Duration::from_millis(5000))
         .foreign_keys(true);
 
@@ -276,6 +279,7 @@ async fn seed_app_request_data_conn(conn: &mut SqliteConnection) -> BenchResult<
 fn app_request_seed_sql() -> &'static str {
     "
     pragma journal_mode = WAL;
+    pragma synchronous = NORMAL;
     pragma busy_timeout = 5000;
     pragma foreign_keys = ON;
 
@@ -366,6 +370,7 @@ fn app_request_seed_sql() -> &'static str {
 fn open_rusqlite_connection() -> rusqlite::Result<Connection> {
     let conn = Connection::open(DB_PATH)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "busy_timeout", 5000)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     Ok(conn)
