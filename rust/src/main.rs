@@ -16,7 +16,7 @@ use generated::sql::app_request_sql;
 
 type BenchResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
-const DEFAULT_ROW_COUNT: i64 = 10_000;
+const DEFAULT_ROW_COUNT: i64 = 5_000;
 const DB_PATH: &str = "rust_benchmark.sqlite3";
 
 #[tokio::main]

@@ -10,7 +10,7 @@ Run SQLite:
 
 ```sh
 gleam deps download
-gleam run 10000
+gleam run 5000
 ```
 
 The SQLite runner emits:
@@ -33,7 +33,7 @@ functions return the same row type for scalar values.
 Run the Postgres cases:
 
 ```sh
-gleam run -m postgres_tests 10000
+gleam run -m postgres_tests 5000
 ```
 
 The Postgres runner prints both the production-derived request shape and a

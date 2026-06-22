@@ -1,7 +1,7 @@
 import gleam/int
 import gleam/result
 
-const default_row_count = 10_000
+const default_row_count = 5000
 
 @external(erlang, "postgres_tests_ffi", "argv")
 fn argv() -> List(String)

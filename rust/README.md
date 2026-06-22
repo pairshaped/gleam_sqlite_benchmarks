@@ -17,7 +17,7 @@ This bucket runs the request-shaped SQLite benchmark through several Rust paths:
 Run it in release mode:
 
 ```sh
-cargo run --release --quiet -- 10000
+cargo run --release --quiet -- 5000
 ```
 
 The runner creates `rust_benchmark.sqlite3` in this directory and prints:

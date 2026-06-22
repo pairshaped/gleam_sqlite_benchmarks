@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-rows="${1:-10000}"
+rows="${1:-5000}"
 runs="${RUNS:-3}"
 out_dir="${OUT_DIR:-benchmark-results/$(date -u +%Y%m%dT%H%M%SZ)}"
 

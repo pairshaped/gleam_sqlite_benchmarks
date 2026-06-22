@@ -7,7 +7,7 @@ pub fn main() -> Nil {
 
 // gleeunit test functions end in `_test`
 pub fn row_count_defaults_without_args_test() {
-  assert sqlite_tests.row_count_from_args([]) == 10_000
+  assert sqlite_tests.row_count_from_args([]) == 5000
 }
 
 pub fn row_count_uses_first_positive_arg_test() {
@@ -15,9 +15,9 @@ pub fn row_count_uses_first_positive_arg_test() {
 }
 
 pub fn row_count_ignores_invalid_arg_test() {
-  assert sqlite_tests.row_count_from_args(["nope"]) == 10_000
+  assert sqlite_tests.row_count_from_args(["nope"]) == 5000
 }
 
 pub fn row_count_ignores_zero_arg_test() {
-  assert sqlite_tests.row_count_from_args(["0"]) == 10_000
+  assert sqlite_tests.row_count_from_args(["0"]) == 5000
 }

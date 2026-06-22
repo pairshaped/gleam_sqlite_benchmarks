@@ -6,7 +6,7 @@ Install and run:
 
 ```sh
 asdf exec bundle install
-asdf exec bundle exec ruby benchmark.rb 10000
+asdf exec bundle exec ruby benchmark.rb 5000
 ```
 
 The runner creates `ruby_benchmark.sqlite3` in this directory and prints:

@@ -5,7 +5,7 @@ require "logger"
 require "timeout"
 require "active_record"
 
-DEFAULT_ROW_COUNT = 10_000
+DEFAULT_ROW_COUNT = 5_000
 BENCHMARK_DB_PATH = "ruby_benchmark.sqlite3"
 CASE_TIMEOUT_SECONDS = Integer(ENV.fetch("BENCH_CASE_TIMEOUT_SECONDS", "60"))
 PROFILE_ROW_COUNT = 300_000

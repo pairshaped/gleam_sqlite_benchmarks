@@ -5,7 +5,7 @@ import gleam/list
 import gleam/result
 import sqlight
 
-const default_row_count = 10_000
+const default_row_count = 5000
 
 const benchmark_db_path = "sqlite_tests_benchmark.sqlite3"
 

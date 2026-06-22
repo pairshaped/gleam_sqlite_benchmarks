@@ -51,7 +51,7 @@ probes enabled.
 ```sh
 cd gleam
 gleam deps download
-gleam run 10000
+gleam run 5000
 ```
 
 ## Run Gleam Postgres
@@ -77,7 +77,7 @@ Run it with:
 
 ```sh
 cd gleam
-gleam run -m postgres_tests 10000
+gleam run -m postgres_tests 5000
 ```
 
 Override the `PG*` variables if your local Postgres uses different settings.
@@ -92,7 +92,7 @@ matter more than settings such as `shared_buffers`, `work_mem`, or
 
 ```sh
 cd rust
-cargo run --release --quiet -- 10000
+cargo run --release --quiet -- 5000
 ```
 
 Use release mode. Debug-mode Rust numbers are not useful for this comparison.
@@ -108,7 +108,7 @@ Ruby is managed with asdf in this repo:
 ```sh
 cd ruby
 asdf exec bundle install
-asdf exec bundle exec ruby benchmark.rb 10000
+asdf exec bundle exec ruby benchmark.rb 5000
 ```
 
 ActiveRecord logging and verbose query logs are disabled. The benchmark uses
@@ -130,7 +130,7 @@ DOCKER_BUILDKIT=1 docker build --ssh default \
 docker run --rm \
   -v "$PWD/benchmark-results:/app/benchmark-results" \
   -e RUNS=5 \
-  sqlite-tests-bench 10000
+  sqlite-tests-bench 5000
 ```
 
 The build clones the Marmot generators from GitHub:
@@ -171,7 +171,7 @@ DOCKER_BUILDKIT=1 docker build --ssh default \
 docker run --rm \
   -v "$PWD/benchmark-results:/app/benchmark-results" \
   -e RUNS=5 \
-  sqlite-tests-bench 10000
+  sqlite-tests-bench 5000
 ```
 
 The dedicated server used for the Linux run:
