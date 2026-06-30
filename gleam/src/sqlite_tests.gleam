@@ -222,14 +222,14 @@ fn app_admin_item_edit_request_marmot(
     value(app_request_sql.count_taxes(db: conn, province: "ON")),
   )
   use parents <- result.try(
-    value(app_request_sql.sum_parent_chain(db: conn, id: 418)),
+    value(app_request_sql.sum_parent_chain(db: conn, club_id: 418)),
   )
   use fees <- result.try(
     value(app_request_sql.count_fees(
       db: conn,
       club_id: 418,
       parent_id: 411,
-      grandparent_id: "403",
+      grandparent_id: 403,
       active: 1,
     )),
   )

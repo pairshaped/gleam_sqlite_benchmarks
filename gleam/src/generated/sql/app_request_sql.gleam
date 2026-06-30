@@ -147,7 +147,7 @@ pub fn count_fees(
   db db: sqlight.Connection,
   club_id club_id: Int,
   parent_id parent_id: Int,
-  grandparent_id grandparent_id: String,
+  grandparent_id grandparent_id: Int,
   active active: Int,
 ) -> Result(List(ValueRow), sqlight.Error) {
   sqlight.query(
@@ -156,7 +156,7 @@ pub fn count_fees(
     with: [
       sqlight.int(club_id),
       sqlight.int(parent_id),
-      sqlight.text(grandparent_id),
+      sqlight.int(grandparent_id),
       sqlight.int(active),
     ],
     expecting: value_row_decoder(),
@@ -331,12 +331,12 @@ pub fn get_user_id(
 /// Generated from ../rust/src/app_request/sql/sum_parent_chain.sql
 pub fn sum_parent_chain(
   db db: sqlight.Connection,
-  id id: Int,
+  club_id club_id: Int,
 ) -> Result(List(ValueRow), sqlight.Error) {
   sqlight.query(
     "with recursive parents(id, parent_id) as ( select id, parent_id from app_clubs where id = @club_id union all select c.id, c.parent_id from app_clubs c inner join parents p on p.parent_id = c.id ) select cast(coalesce(sum(id), 0) as integer) as value from parents",
     on: db,
-    with: [sqlight.int(id)],
+    with: [sqlight.int(club_id)],
     expecting: value_row_decoder(),
   )
 }
