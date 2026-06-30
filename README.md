@@ -139,7 +139,7 @@ The build clones the Marmot generators from GitHub:
 - `git@github.com:pairshaped/marmot-rust.git`
 
 This benchmark repo still uses the legacy Marmot Rust `src/*/sql/*.sql` layout,
-so pin `RUST_MARMOT_REF=e99b1db74f9e28a595d5378d1c979cf5180b6695`
+so pin `RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5`
 until those SQL files are ported to companion `-- func:` blocks.
 
 If you want to use HTTPS instead, override the repo args:
@@ -149,7 +149,7 @@ DOCKER_BUILDKIT=1 docker build \
   --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
   --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
   --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
-  --build-arg RUST_MARMOT_REF=e99b1db74f9e28a595d5378d1c979cf5180b6695 \
+  --build-arg RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5 \
   -f docker/bench.Dockerfile \
   -t sqlite-tests-bench .
 ```
@@ -182,7 +182,7 @@ DOCKER_BUILDKIT=1 docker build \
   --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
   --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
   --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
-  --build-arg RUST_MARMOT_REF=e99b1db74f9e28a595d5378d1c979cf5180b6695 \
+  --build-arg RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5 \
   -f docker/bench.Dockerfile \
   -t sqlite-tests-bench .
 
