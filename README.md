@@ -153,25 +153,44 @@ Use `GLEAM_MARMOT_REF` and `RUST_MARMOT_REF` build args to test branches or
 tags. Results are written under `benchmark-results/`, including raw CSV files,
 machine metadata, and a median summary.
 
-For a dedicated Debian box, SSH in with agent forwarding, clone this repo, and
-run the same commands there:
+For a dedicated production-hardware benchmark box, run the benchmark through
+Docker. This repo is not deployed like an application. The host does not need
+Rust, Gleam, or Ruby installed directly; the benchmark image installs those
+toolchains.
+
+Keep the concrete benchmark host, SSH user, and any existing server checkout
+paths in private ops notes or your shell config, not in this public repo. If the
+server has an older copied tree from previous runs, treat it as historical
+output unless it is also a git checkout.
 
 ```sh
-ssh -A <user>@158.69.26.105
+ssh <benchmark-user>@<benchmark-host>
 sudo apt update
 sudo apt install -y docker.io git openssh-client
 # If your user cannot access Docker yet, either prefix docker commands with
 # sudo or run: sudo usermod -aG docker "$USER" && newgrp docker
-git clone git@github.com:pairshaped/gleam_sqlite_benchmarks.git
+
+git clone https://github.com/pairshaped/gleam_sqlite_benchmarks.git
 cd gleam_sqlite_benchmarks
-DOCKER_BUILDKIT=1 docker build --ssh default \
+
+DOCKER_BUILDKIT=1 docker build \
   --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
+  --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
+  --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
   -f docker/bench.Dockerfile \
   -t sqlite-tests-bench .
+
 docker run --rm \
   -v "$PWD/benchmark-results:/app/benchmark-results" \
   -e RUNS=5 \
-  sqlite-tests-bench 5000
+  sqlite-tests-bench 10000
+```
+
+Use a distinct tag when testing a branch so the old image remains available:
+
+```sh
+docker build ... -t sqlite-tests-bench:query-only .
+docker run --rm -v "$PWD/benchmark-results:/app/benchmark-results" -e RUNS=5 sqlite-tests-bench:query-only 10000
 ```
 
 The dedicated server used for the Linux run:

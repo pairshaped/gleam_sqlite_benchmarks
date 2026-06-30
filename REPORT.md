@@ -386,8 +386,10 @@ cd rust && cargo run --release --quiet -- 1000
 cd ruby && asdf exec bundle exec ruby -c benchmark.rb
 cd ruby && asdf exec bundle exec ruby benchmark.rb 1000
 
-DOCKER_BUILDKIT=1 docker build --ssh default \
+DOCKER_BUILDKIT=1 docker build \
   --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
+  --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
+  --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
   -f docker/bench.Dockerfile \
   -t sqlite-tests-bench .
 
