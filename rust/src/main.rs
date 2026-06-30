@@ -32,6 +32,11 @@ async fn main() -> BenchResult<()> {
     measure_sync("rust_rusqlite/app_request/admin_item_edit", rows, || {
         admin_item_edit_requests_rusqlite(rows)
     })?;
+    measure_sync(
+        "rust_rusqlite_query_only/app_request/admin_item_edit",
+        rows,
+        || admin_item_edit_requests_rusqlite_query_only(rows),
+    )?;
     measure_sync("rust_rusqlite/app_request/admin_item_update", rows, || {
         admin_item_update_requests_rusqlite(rows)
     })?;
@@ -376,6 +381,12 @@ fn open_rusqlite_connection() -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
+fn open_rusqlite_query_only_connection() -> rusqlite::Result<Connection> {
+    let conn = open_rusqlite_connection()?;
+    conn.pragma_update(None, "query_only", "ON")?;
+    Ok(conn)
+}
+
 fn seed_app_request_data_rusqlite() -> BenchResult<i64> {
     let conn = open_rusqlite_connection()?;
     conn.execute_batch(
@@ -474,6 +485,33 @@ fn admin_item_edit_requests_rusqlite(rows: i64) -> BenchResult<i64> {
         check += admin_item_edit_request_rusqlite(&conn, event_id)?;
     }
     Ok(check)
+}
+
+fn admin_item_edit_requests_rusqlite_query_only(rows: i64) -> BenchResult<i64> {
+    let conn = open_rusqlite_query_only_connection()?;
+    assert_query_only_blocks_writes(&conn)?;
+
+    let mut check = 0;
+    for i in 1..=rows {
+        let event_id = ((i - 1) % 100) + 1;
+        check += admin_item_edit_request_rusqlite(&conn, event_id)?;
+    }
+    Ok(check)
+}
+
+fn assert_query_only_blocks_writes(conn: &Connection) -> BenchResult<()> {
+    match conn.execute(
+        "insert into app_users (id, name) values (?, ?)",
+        (999_i64, "Blocked"),
+    ) {
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::ReadOnly =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(Box::new(error)),
+        Ok(_) => Err("query_only connection allowed a write".into()),
+    }
 }
 
 fn one(conn: &Connection, sql: &str, params: &[&dyn rusqlite::ToSql]) -> rusqlite::Result<i64> {

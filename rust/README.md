@@ -3,6 +3,8 @@
 This bucket runs the request-shaped SQLite benchmark through several Rust paths:
 
 - `rust_rusqlite/*`: direct `rusqlite` calls.
+- `rust_rusqlite_query_only/*`: direct `rusqlite` reads through a connection
+  with `PRAGMA query_only = ON`.
 - `rust_marmot/*`: generated `rusqlite` calls from colocated `.sql` files.
 - `rust_sqlx/*`: `sqlx` with a `SqlitePool` and `max_connections(5)`.
 - `rust_sqlx_pool1/*`: same SQLx pool path with `max_connections(1)`.
@@ -30,6 +32,7 @@ Cases:
 
 - `rust_rusqlite/app_request/seed_dummy_data`
 - `rust_rusqlite/app_request/admin_item_edit`
+- `rust_rusqlite_query_only/app_request/admin_item_edit`
 - `rust_rusqlite/app_request/admin_item_update`
 - `rust_marmot/app_request/seed_dummy_data`
 - `rust_marmot/app_request/admin_item_edit`
@@ -44,6 +47,9 @@ Cases:
 - `rust_sqlx_manual_tx/app_request/admin_item_update`
 
 SQLite is configured with WAL, `busy_timeout=5000`, and foreign keys enabled.
+The query-only `rusqlite` case uses the same read-heavy request shape after
+enabling `PRAGMA query_only = ON`, and asserts that a write through that
+connection is rejected.
 The baseline SQLx pool uses `max_connections(5)`. The `rusqlite` path uses the
 same request-shaped sequence with normal driver calls, not a hot
 prepared-statement loop.
