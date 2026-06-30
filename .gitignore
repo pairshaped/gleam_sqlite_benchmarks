@@ -1,6 +1,7 @@
 *.beam
 *.ez
 erl_crash.dump
+.DS_Store
 
 /gleam/build
 /gleam/*.sqlite3
