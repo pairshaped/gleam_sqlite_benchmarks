@@ -1,12 +1,13 @@
 # SQLite Request-Shape Benchmarks
 
-This repo compares one synthetic but app-shaped SQLite workload across three
+This repo compares one synthetic but app-shaped SQLite workload across four
 language buckets:
 
 - [gleam/](gleam/): Gleam on BEAM with `sqlight`, Gleam Marmot-generated
   `sqlight`, plus local Postgres through `pog`.
 - [rust/](rust/): Rust with hand-written `rusqlite`, Marmot-generated
   `rusqlite`, and `sqlx` against SQLite.
+- [bun/](bun/): Bun with its built-in `bun:sqlite` driver.
 - [ruby/](ruby/): Ruby with ActiveRecord and SQLite.
 
 The benchmark intentionally avoids real application data. The schema, rows, and
@@ -23,6 +24,7 @@ numbers.
 - [Gleam runner](gleam/README.md): `sqlight` and `pog` commands and defaults.
 - [Rust runner](rust/README.md): hand-written `rusqlite`, Marmot-generated
   `rusqlite`, and SQLx commands.
+- [Bun runner](bun/README.md): `bun:sqlite` command and statement-cache notes.
 - [Ruby runner](ruby/README.md): ActiveRecord command and ORM notes.
 
 ## What Runs
@@ -101,6 +103,19 @@ The Rust runner prints both `rust_rusqlite/*` and `rust_sqlx/*` rows. The
 files. The `rusqlite` rows use the same request shape with normal driver calls,
 not a hot prepared-statement loop.
 
+## Run Bun
+
+```sh
+cd bun
+bun run benchmark.ts 5000
+```
+
+The Bun runner prints `bun_sqlite/*` rows, which prepare and finalize a
+statement for every query like the `rusqlite` rows, and `bun_sqlite_cached/*`
+rows, which use Bun's idiomatic `db.query` statement cache. It has no runtime
+dependencies; `bun install` only fetches type declarations for `bun run
+typecheck`.
+
 ## Run Ruby ActiveRecord
 
 Ruby is managed with asdf in this repo:
@@ -160,7 +175,7 @@ machine metadata, and a median summary.
 
 For a dedicated production-hardware benchmark box, run the benchmark through
 Docker. This repo is not deployed like an application. The host does not need
-Rust, Gleam, or Ruby installed directly; the benchmark image installs those
+Rust, Gleam, Bun, or Ruby installed directly; the benchmark image installs those
 toolchains.
 
 Keep the concrete benchmark host, SSH user, and any existing server checkout

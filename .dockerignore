@@ -10,6 +10,10 @@ rust/target
 rust/*.sqlite3
 rust/*.sqlite3-*
 
+bun/node_modules
+bun/*.sqlite3
+bun/*.sqlite3-*
+
 ruby/.bundle
 ruby/vendor/bundle
 ruby/*.sqlite3

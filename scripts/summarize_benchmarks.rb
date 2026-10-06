@@ -50,7 +50,8 @@ def suite_rank(suite)
     "rust" => 0,
     "gleam_sqlite" => 1,
     "gleam_postgres" => 2,
-    "ruby" => 3,
+    "bun" => 3,
+    "ruby" => 4,
   }.fetch(suite, 9)
 end
 
@@ -67,6 +68,8 @@ def case_rank(case_name, type)
     "app_request/#{type}",
     "gleam_marmot/app_request/#{type}",
     "batched_request/#{type}",
+    "bun_sqlite/app_request/#{type}",
+    "bun_sqlite_cached/app_request/#{type}",
     "active_record/app_request/#{type}",
   ]
 

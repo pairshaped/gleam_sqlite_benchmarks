@@ -1,0 +1,13 @@
+{
+  "name": "sqlite-tests-bun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "bun run benchmark.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  }
+}

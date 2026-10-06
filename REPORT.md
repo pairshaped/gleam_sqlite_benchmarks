@@ -54,6 +54,7 @@ not used for the main cross-language throughput table.
 - `gleam/`: Gleam benchmark project, including raw SQLite, Gleam
   Marmot-generated SQLite, and local Postgres through `pog`.
 - `rust/`: Rust `rusqlite` and SQLx benchmark.
+- `bun/`: Bun `bun:sqlite` benchmark.
 - `ruby/`: Ruby ActiveRecord benchmark.
 
 The runnable benchmark surface focuses on the app-shaped seed, read request,

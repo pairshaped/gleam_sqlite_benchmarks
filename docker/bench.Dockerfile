@@ -7,6 +7,7 @@ ARG GLEAM_VERSION=1.17.0
 ARG GLEAM_TARGET=
 ARG RUST_VERSION=1.95.0
 ARG RUBY_VERSION=4.0.5
+ARG BUN_VERSION=1.4.2
 ARG GLEAM_MARMOT_REPO=git@github.com:pairshaped/marmot.git
 ARG GLEAM_MARMOT_REF=
 ARG RUST_MARMOT_REPO=git@github.com:pairshaped/marmot-rust.git
@@ -68,6 +69,18 @@ RUN case "${GLEAM_TARGET:-}" in \
   && tar -xzf /tmp/gleam.tar.gz -C /usr/local/bin gleam \
   && rm /tmp/gleam.tar.gz
 
+RUN case "${TARGETARCH}" in \
+    amd64) bun_target="linux-x64" ;; \
+    arm64) bun_target="linux-aarch64" ;; \
+    *) echo "Unsupported Docker architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac \
+  && curl -fsSL \
+    "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-${bun_target}.zip" \
+    -o /tmp/bun.zip \
+  && unzip -j /tmp/bun.zip "bun-${bun_target}/bun" -d /usr/local/bin \
+  && rm /tmp/bun.zip \
+  && bun --version
+
 RUN git clone --depth 1 https://github.com/rbenv/ruby-build.git /tmp/ruby-build \
   && PREFIX=/usr/local /tmp/ruby-build/install.sh \
   && ruby-build "${RUBY_VERSION}" /usr/local/ruby \
@@ -90,6 +103,7 @@ RUN --mount=type=ssh \
 WORKDIR /app
 COPY gleam ./gleam
 COPY rust ./rust
+COPY bun ./bun
 COPY ruby ./ruby
 
 RUN cd gleam \

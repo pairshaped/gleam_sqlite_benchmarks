@@ -4,6 +4,7 @@ set -euo pipefail
 rows="${1:-5000}"
 runs="${RUNS:-3}"
 out_dir="${OUT_DIR:-benchmark-results/$(date -u +%Y%m%dT%H%M%SZ)}"
+suites="${SUITES:-gleam_sqlite gleam_postgres rust bun ruby}"
 
 if ! [[ "$rows" =~ ^[0-9]+$ ]]; then
   echo "Row count must be a positive integer" >&2
@@ -22,6 +23,7 @@ metadata_file="$out_dir/metadata.txt"
   echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "rows=$rows"
   echo "runs=$runs"
+  echo "suites=$suites"
   echo "git_rev=${BENCHMARK_GIT_REV:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
   echo
   uname -a || true
@@ -33,6 +35,7 @@ metadata_file="$out_dir/metadata.txt"
   gleam --version || true
   rustc --version || true
   cargo --version || true
+  bun --version || true
   ruby -v || true
   bundle -v || true
   psql --version || true
@@ -65,6 +68,7 @@ start_postgres() {
 clean_sqlite_files() {
   rm -f gleam/*.sqlite3 gleam/*.sqlite3-* gleam/*_probe.bin
   rm -f rust/*.sqlite3 rust/*.sqlite3-*
+  rm -f bun/*.sqlite3 bun/*.sqlite3-*
   rm -f ruby/*.sqlite3 ruby/*.sqlite3-*
 }
 
@@ -73,13 +77,20 @@ run_suite() {
   local run="$2"
   shift 2
 
+  case " $suites " in
+    *" $suite "*) ;;
+    *) return ;;
+  esac
+
   local file="$out_dir/${suite}_run_${run}.csv"
   echo "==> ${suite} run ${run}/${runs}"
   clean_sqlite_files
   "$@" | tee "$file"
 }
 
-start_postgres
+case " $suites " in
+  *" gleam_postgres "*) start_postgres ;;
+esac
 
 for run in $(seq 1 "$runs"); do
   run_suite gleam_sqlite "$run" bash -c \
@@ -88,6 +99,8 @@ for run in $(seq 1 "$runs"); do
     'cd gleam && PGHOST=/var/run/postgresql PGUSER=root PGDATABASE=postgres gleam run -m postgres_tests "$1"' _ "$rows"
   run_suite rust "$run" bash -c \
     'cd rust && cargo run --release --quiet -- "$1"' _ "$rows"
+  run_suite bun "$run" bash -c \
+    'cd bun && bun run benchmark.ts "$1"' _ "$rows"
   run_suite ruby "$run" bash -c \
     'cd ruby && bundle exec ruby benchmark.rb "$1"' _ "$rows"
 done

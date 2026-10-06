@@ -13,6 +13,10 @@ erl_crash.dump
 /rust/*.sqlite3-*
 /rust/*_probe.bin
 
+/bun/node_modules
+/bun/*.sqlite3
+/bun/*.sqlite3-*
+
 /ruby/*.sqlite3
 /ruby/*.sqlite3-*
 
