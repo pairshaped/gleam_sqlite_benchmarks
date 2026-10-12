@@ -1,4 +1,4 @@
 case,items,micros,us_per_item,check
-c_sqlite/app_request/seed_dummy_data,1,38812,38812,100
-c_sqlite/app_request/admin_item_edit,10000,1131286,113,27395000
-c_sqlite/app_request/admin_item_update,10000,400284,40,5550000
+c_sqlite/app_request/seed_dummy_data,1,7172,7172,100
+c_sqlite/app_request/admin_item_edit,10000,577879,57,27395000
+c_sqlite/app_request/admin_item_update,10000,140272,14,5550000

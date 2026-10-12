@@ -1,7 +1,9 @@
 # DigitalOcean CPU-Optimized, 4 vCPU
 
-The same Droplet as the [2-vCPU report](../do-c-2/README.md), resized to 4 vCPUs.
-It landed on the same CPU model, so the two reports differ only in size.
+This Droplet started as a 2-vCPU Droplet with the same Xeon Platinum 8168 and was
+resized to 4 vCPUs. The [2-vCPU report](../do-c-2/README.md) comes from a later
+Droplet with a faster Xeon Platinum 8280, so compare the two reports by their
+ratios to C, not their absolute numbers.
 
 ## Machine
 
@@ -34,9 +36,10 @@ better.
 | Gleam, default BEAM | 333 | 2.8x | 108 | 2.7x |
 | Gleam, `+SDio 4` | 332 | 2.8x | 104 | 2.6x |
 
-- Rust, Bun and Go land where they did on 2 vCPUs. One request at a time runs
-  on one core, so the extra cores don't change their numbers.
-- Gleam improved the most: from 1,147 µs on 2 vCPUs to 333 µs here, with most
+- Against the same Droplet's earlier run at 2 vCPUs, Rust, Bun and Go landed
+  where they had: one request at a time runs on one core, so the extra cores
+  don't change their numbers.
+- Gleam improved the most: from 1,147 µs at 2 vCPUs to 333 µs here, with most
   runs consistent (the read request ranged from 318 to 700 µs). With 4 vCPUs,
   the BEAM's dirty I/O scheduler handoffs are much cheaper, and the default and
   tuned rows now match.
@@ -88,9 +91,9 @@ The full summary, including p99 latency tables, is in
 ### What the concurrent numbers say
 
 - Reads scale cleanly. C reaches 2.2x at 2 workers and 3.0x at 4, the extra
-  above 2x presumably from hyperthreading. The 2-vCPU box's weak 2-worker
-  result didn't reproduce here, which points to how that VM's two vCPUs map to
-  physical cores rather than to SQLite.
+  above 2x presumably from hyperthreading. Both 2-vCPU Droplets' weak 2-worker
+  results didn't reproduce here, which points to how a 2-vCPU Droplet's vCPUs
+  map to physical cores rather than to SQLite.
 - Zig matches C throughout. Rust reaches about 90% of C's throughput at 8
   workers and Bun about 80%, so both keep a steady gap as workers are added.
 - Go's reads plateau at about 11,500 requests per second from 4 workers on,

@@ -10,25 +10,25 @@ requests per second across all workers; latencies are per request in µs.
 
 | Suite | 1 worker | 2 workers | 4 workers | Best vs 1 worker |
 | --- | ---: | ---: | ---: | ---: |
-| c | 8,505 | 11,370 | 17,759 | 2.1x |
-| rust | 8,017 | 9,132 | 16,097 | 2.0x |
-| zig | 8,648 | 11,232 | 17,656 | 2.0x |
-| go | 4,588 | 4,774 | 6,198 | 1.4x |
-| bun | 7,285 | 7,732 | 13,594 | 1.9x |
-| gleam_sqlite | 754 | 1,099 | 2,474 | 3.3x |
-| gleam_sqlite_sdio | 2,124 | 2,887 | 4,080 | 1.9x |
+| c | 17,404 | 18,485 | 28,892 | 1.7x |
+| rust | 15,949 | 14,801 | 25,252 | 1.6x |
+| zig | 17,716 | 18,106 | 28,977 | 1.6x |
+| go | 8,206 | 8,838 | 8,803 | 1.1x |
+| bun | 13,215 | 12,539 | 19,672 | 1.5x |
+| gleam_sqlite | 1,456 | 2,016 | 4,422 | 3.0x |
+| gleam_sqlite_sdio | 1,418 | 4,806 | 6,656 | 4.7x |
 
 ### p99 latency (µs, lower is better)
 
 | Suite | 1 worker | 2 workers | 4 workers |
 | --- | ---: | ---: | ---: |
-| c | 173 | 242 | 4,134 |
-| rust | 198 | 298 | 4,149 |
-| zig | 170 | 249 | 4,135 |
-| go | 437 | 2,699 | 15,034 |
-| bun | 226 | 379 | 4,223 |
-| gleam_sqlite | 1,495 | 2,197 | 2,250 |
-| gleam_sqlite_sdio | 588 | 992 | 1,592 |
+| c | 78 | 157 | 4,075 |
+| rust | 82 | 185 | 4,090 |
+| zig | 74 | 156 | 4,075 |
+| go | 167 | 285 | 5,164 |
+| bun | 125 | 218 | 4,128 |
+| gleam_sqlite | 874 | 1,266 | 1,290 |
+| gleam_sqlite_sdio | 867 | 565 | 887 |
 
 
 ## `write`
@@ -37,25 +37,25 @@ requests per second across all workers; latencies are per request in µs.
 
 | Suite | 1 worker | 2 workers | 4 workers | Best vs 1 worker |
 | --- | ---: | ---: | ---: | ---: |
-| c | 24,600 | 36,252 | 36,161 | 1.5x |
-| rust | 24,248 | 31,110 | 32,615 | 1.3x |
-| zig | 25,000 | 35,232 | 35,622 | 1.4x |
-| go | 15,336 | 13,342 | 13,150 | 1.0x |
-| bun | 22,310 | 28,063 | 27,071 | 1.3x |
-| gleam_sqlite | 3,230 | 2,076 | 2,177 | 1.0x |
-| gleam_sqlite_sdio | 9,408 | 6,104 | 0 | 1.0x |
+| c | 80,937 | 78,535 | 78,587 | 1.0x |
+| rust | 71,600 | 71,609 | 70,987 | 1.0x |
+| zig | 79,027 | 78,309 | 81,118 | 1.0x |
+| go | 43,560 | 43,023 | 43,994 | 1.0x |
+| bun | 56,753 | 55,420 | 54,956 | 1.0x |
+| gleam_sqlite | 6,057 | 5,615 | 5,862 | 1.0x |
+| gleam_sqlite_sdio | 16,284 | 16,216 | 0 | 1.0x |
 
 ### p99 latency (µs, lower is better)
 
 | Suite | 1 worker | 2 workers | 4 workers |
 | --- | ---: | ---: | ---: |
-| c | 35 | 66 | 61 |
-| rust | 38 | 85 | 82 |
-| zig | 34 | 65 | 71 |
-| go | 98 | 3,115 | 3,982 |
-| bun | 53 | 137 | 181 |
-| gleam_sqlite | 357 | 5,628 | 18,784 |
-| gleam_sqlite_sdio | 133 | 4,168 | 5,011,656 |
+| c | 21 | 22 | 25 |
+| rust | 22 | 24 | 28 |
+| zig | 23 | 24 | 22 |
+| go | 38 | 53 | 102 |
+| bun | 32 | 34 | 37 |
+| gleam_sqlite | 218 | 216 | 224 |
+| gleam_sqlite_sdio | 81 | 86 | 5,009,548 |
 
 ### Errors (failed requests, summed across runs)
 
@@ -73,13 +73,13 @@ requests per second across all workers; latencies are per request in µs.
 
 | Suite | 1 worker | 2 workers | 4 workers |
 | --- | ---: | ---: | ---: |
-| c | 133,091 | 152,508 | 1,839,984 |
-| rust | 105,011 | 134,030 | 1,437,530 |
-| zig | 176,200 | 160,884 | 1,938,375 |
-| go | 125,042 | 121,519 | 1,034,357 |
-| bun | 112,978 | 96,735 | 1,847,383 |
-| gleam_sqlite | 146,207 | 86,913 | 634,764 |
-| gleam_sqlite_sdio | 62,290 | 128,927 | 5,017,982 |
+| c | 5,400 | 1,230,271 | 1,330,023 |
+| rust | 17,720 | 1,130,102 | 1,334,847 |
+| zig | 4,352 | 929,790 | 1,934,319 |
+| go | 10,007 | 36,118 | 99,083 |
+| bun | 3,584 | 929,844 | 1,137,831 |
+| gleam_sqlite | 8,686 | 1,630,306 | 1,530,025 |
+| gleam_sqlite_sdio | 6,518 | 1,329,985 | 5,009,548 |
 
 
 ## `mixed`
@@ -88,25 +88,25 @@ requests per second across all workers; latencies are per request in µs.
 
 | Suite | 1 worker | 2 workers | 4 workers | Best vs 1 worker |
 | --- | ---: | ---: | ---: | ---: |
-| c | 11,513 | 8,741 | 15,688 | 1.4x |
-| rust | 11,045 | 7,987 | 14,620 | 1.3x |
-| zig | 11,507 | 8,662 | 15,933 | 1.4x |
-| go | 5,481 | 5,321 | 5,390 | 1.0x |
-| bun | 9,416 | 7,422 | 11,452 | 1.2x |
-| gleam_sqlite | 948 | 1,204 | 2,869 | 3.0x |
-| gleam_sqlite_sdio | 2,829 | 3,920 | 1,459 | 1.4x |
+| c | 20,927 | 17,318 | 25,969 | 1.2x |
+| rust | 18,034 | 14,810 | 24,723 | 1.4x |
+| zig | 21,961 | 18,307 | 27,325 | 1.2x |
+| go | 9,569 | 9,766 | 9,461 | 1.0x |
+| bun | 16,633 | 13,367 | 18,412 | 1.1x |
+| gleam_sqlite | 1,589 | 2,163 | 4,678 | 2.9x |
+| gleam_sqlite_sdio | 4,402 | 2,922 | 5,756 | 1.3x |
 
 ### p99 latency (µs, lower is better)
 
 | Suite | 1 worker | 2 workers | 4 workers |
 | --- | ---: | ---: | ---: |
-| c | 144 | 3,712 | 3,043 |
-| rust | 155 | 3,620 | 3,089 |
-| zig | 145 | 3,680 | 2,986 |
-| go | 391 | 2,445 | 13,601 |
-| bun | 189 | 3,444 | 3,837 |
-| gleam_sqlite | 1,273 | 2,222 | 2,259 |
-| gleam_sqlite_sdio | 468 | 964 | 2,536 |
+| c | 72 | 200 | 1,272 |
+| rust | 77 | 216 | 1,269 |
+| zig | 68 | 198 | 1,237 |
+| go | 150 | 284 | 4,989 |
+| bun | 110 | 238 | 1,970 |
+| gleam_sqlite | 798 | 1,328 | 1,352 |
+| gleam_sqlite_sdio | 283 | 1,290 | 1,109 |
 
 ### Errors (failed requests, summed across runs)
 
@@ -118,5 +118,5 @@ requests per second across all workers; latencies are per request in µs.
 | go | 0 | 0 | 0 |
 | bun | 0 | 0 | 0 |
 | gleam_sqlite | 0 | 0 | 0 |
-| gleam_sqlite_sdio | 0 | 0 | 5 |
+| gleam_sqlite_sdio | 0 | 0 | 2 |
 

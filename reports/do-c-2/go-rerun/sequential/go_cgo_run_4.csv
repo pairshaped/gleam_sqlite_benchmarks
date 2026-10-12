@@ -1,4 +1,0 @@
-case,items,micros,us_per_item,check
-go_cgo/app_request/seed_dummy_data,1,23640,23640,100
-go_cgo/app_request/admin_item_edit,10000,1427559,142,27395000
-go_cgo/app_request/admin_item_update,10000,609967,60,5550000

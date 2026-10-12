@@ -1,4 +1,4 @@
 case,items,micros,us_per_item,check
-gleam_esqlite/app_request/seed_dummy_data,1,9818,9818,100
-gleam_esqlite/app_request/admin_item_edit,10000,4164544,416,27395000
-gleam_esqlite/app_request/admin_item_update,10000,1157475,115,5550000
+gleam_esqlite/app_request/seed_dummy_data,1,3570,3570,100
+gleam_esqlite/app_request/admin_item_edit,10000,2285872,228,27395000
+gleam_esqlite/app_request/admin_item_update,10000,574883,57,5550000
