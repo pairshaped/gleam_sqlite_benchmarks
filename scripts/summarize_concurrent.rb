@@ -126,3 +126,21 @@ if File.exist?(failures)
   puts
   File.readlines(failures, chomp: true).each { |line| puts "- #{line}" }
 end
+
+steal = File.join(dir, "steal.csv")
+if File.exist?(steal)
+  rows = CSV.read(steal, headers: true)
+  worst = rows.max_by { |row| row["steal_percent"].to_f }
+  if worst && worst["steal_percent"].to_f.positive?
+    puts
+    puts "## CPU steal"
+    puts
+    puts "Share of CPU time the hypervisor gave to other tenants during each suite run."
+    puts "Anything above zero means neighbours competed for the CPU; compare runs with"
+    puts "high steal cautiously. Highest: #{worst["suite"]} run #{worst["run"]} at #{worst["steal_percent"]}%."
+    puts
+    puts "| Suite | Run | Steal |"
+    puts "| --- | ---: | ---: |"
+    rows.each { |row| puts "| #{row["suite"]} | #{row["run"]} | #{row["steal_percent"]}% |" }
+  end
+end

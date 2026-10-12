@@ -145,3 +145,21 @@ benchmark_summaries.group_by { |row| row[:type] }.sort.each_with_index do |(type
     ].join(" | ").prepend("| ").concat(" |")
   end
 end
+
+steal = File.join(out_dir, "steal.csv")
+if File.exist?(steal)
+  rows = CSV.read(steal, headers: true)
+  worst = rows.max_by { |row| row["steal_percent"].to_f }
+  if worst && worst["steal_percent"].to_f.positive?
+    puts
+    puts "## CPU steal"
+    puts
+    puts "Share of CPU time the hypervisor gave to other tenants during each suite run."
+    puts "Anything above zero means neighbours competed for the CPU; compare runs with"
+    puts "high steal cautiously. Highest: #{worst["suite"]} run #{worst["run"]} at #{worst["steal_percent"]}%."
+    puts
+    puts "| Suite | Run | Steal |"
+    puts "| --- | ---: | ---: |"
+    rows.each { |row| puts "| #{row["suite"]} | #{row["run"]} | #{row["steal_percent"]}% |" }
+  end
+end

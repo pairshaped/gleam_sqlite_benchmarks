@@ -267,7 +267,9 @@ Choose the box deliberately:
 - Building needs about 2 GB of RAM, mostly for the Rust release build. On 1 GB,
   add swap and set `CARGO_BUILD_JOBS=1`.
 - Plans with dedicated vCPUs give steadier numbers. Shared vCPUs work but are
-  noisier, so raise `RUNS` and compare medians.
+  noisier, so raise `RUNS` and compare medians. On Linux, `run_all.sh` records
+  CPU steal (time the hypervisor gave to other tenants) for each suite run in
+  `steal.csv`, and the summary lists it when any is above zero.
 - Avoid burstable plans that throttle once CPU credits run out mid-run.
 - On x86, check for AVX2 (`grep -c avx2 /proc/cpuinfo`). Bun's standard x64
   build needs it.

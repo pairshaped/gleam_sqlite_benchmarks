@@ -88,6 +88,15 @@ clean_sqlite_files() {
   rm -f go/*.sqlite3 go/*.sqlite3-*
 }
 
+# CPU time the hypervisor gave to other tenants ("steal"), from /proc/stat on
+# Linux. Prints "steal total" in clock ticks, or nothing elsewhere.
+cpu_ticks() {
+  [ -r /proc/stat ] || return 0
+  # Fields 2-9 are user, nice, system, idle, iowait, irq, softirq and steal. The
+  # guest columns after them are already counted in user, so leave them out.
+  awk '/^cpu / { total = 0; for (i = 2; i <= 9; i++) total += $i; print $9, total }' /proc/stat
+}
+
 run_suite() {
   local suite="$1"
   local run="$2"
@@ -101,10 +110,20 @@ run_suite() {
   local file="$out_dir/${suite}_run_${run}.csv"
   echo "==> ${suite} run ${run}/${runs}"
   clean_sqlite_files
+  local before after
+  before="$(cpu_ticks)"
   # Keep going if one suite fails, so the other suites and runs still finish.
   # The summary lists failures from failures.txt.
   if ! "$@" | tee "$file"; then
     echo "${suite} run ${run} failed" | tee -a "$out_dir/failures.txt" >&2
+  fi
+  after="$(cpu_ticks)"
+  if [ -n "$before" ] && [ -n "$after" ]; then
+    [ -f "$out_dir/steal.csv" ] || echo "suite,run,steal_percent" > "$out_dir/steal.csv"
+    echo "$before $after" | awk -v suite="$suite" -v run="$run" '{
+      total = $4 - $2
+      printf "%s,%s,%.2f\n", suite, run, (total > 0 ? 100 * ($3 - $1) / total : 0)
+    }' >> "$out_dir/steal.csv"
   fi
 }
 
