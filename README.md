@@ -146,16 +146,20 @@ for example in a long-lived process that owns it.
 query moves the calling process to a dirty I/O thread and back. The BEAM starts
 10 dirty I/O threads regardless of how many CPUs the machine has. On a small VM
 those extra threads fight over the cores, waking them is slow, and runs flip
-between fast and slow with no other change. On a 2-vCPU Droplet, cached Gleam
-read requests took anywhere from 423 to 1,286 µs with the default settings.
+between fast and slow with no other change. On a 2-vCPU Droplet with a Xeon
+Platinum 8168, cached Gleam read requests took anywhere from 423 to 1,286 µs
+with the default settings.
 
 So the Gleam runner runs twice:
 
 - `gleam_sqlite` uses the BEAM defaults. This is what an app gets unless
   someone tunes it, and it's the row to compare against the other languages.
-- `gleam_sqlite_sdio` sets `+SDio` to the machine's CPU count, which held the
-  same Droplet at 423 to 435 µs. On a machine with 10 or more CPUs the two rows
-  should match, because the default already fits.
+- `gleam_sqlite_sdio` sets `+SDio` to the machine's CPU count. On that 8168
+  Droplet it held runs at 423 to 435 µs. On a 2-vCPU Droplet with a Xeon
+  Platinum 8280 it didn't help: both rows stayed inconsistent, and the tuned
+  one was slower. Whether the cap helps depends on the machine. On a machine
+  with 10 or more CPUs the two rows should match, because the default already
+  fits.
 
 The tuned row is a real production option, with one condition. `+SDio` matching
 the CPU count is a one-line setting in `vm.args` or `ERL_FLAGS`, but SQLite's
