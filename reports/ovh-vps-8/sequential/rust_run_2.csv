@@ -1,0 +1,5 @@
+case,items,micros,us_per_item,check
+rust_rusqlite/app_request/seed_dummy_data,1,11277,11277,100
+rust_rusqlite/app_request/admin_item_edit,10000,1249384,124,27395000
+rust_rusqlite_query_only/app_request/admin_item_edit,10000,1208054,120,27395000
+rust_rusqlite/app_request/admin_item_update,10000,277246,27,5550000

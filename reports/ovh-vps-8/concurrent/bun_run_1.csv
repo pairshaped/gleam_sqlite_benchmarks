@@ -1,0 +1,16 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+bun_sqlite/concurrent/read,1,5,30358,6072,146,252,316,11076,0
+bun_sqlite/concurrent/read,2,5,37298,7460,252,420,524,4985,0
+bun_sqlite/concurrent/read,4,5,124350,24870,146,271,353,26719,0
+bun_sqlite/concurrent/read,8,5,211395,42279,163,268,444,28463,0
+bun_sqlite/concurrent/read,16,5,221556,44311,178,1020,1979,93565,0
+bun_sqlite/concurrent/write,1,5,134801,26960,25,51,74,18261,0
+bun_sqlite/concurrent/write,2,5,131447,26289,26,56,80,930845,0
+bun_sqlite/concurrent/write,4,5,127818,25564,27,59,88,2032735,0
+bun_sqlite/concurrent/write,8,5,114644,22929,28,70,1207,2432220,0
+bun_sqlite/concurrent/write,16,5,89972,17994,37,900,8326,1938506,0
+bun_sqlite/concurrent/mixed,1,5,36228,7246,121,219,255,11324,0
+bun_sqlite/concurrent/mixed,2,5,42270,8454,229,391,547,9603,0
+bun_sqlite/concurrent/mixed,4,5,102396,20479,171,336,1161,33695,0
+bun_sqlite/concurrent/mixed,8,5,127552,25510,216,853,2060,54659,0
+bun_sqlite/concurrent/mixed,16,5,143242,28648,401,1211,3336,130719,0

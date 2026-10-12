@@ -1,0 +1,16 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+zig_sqlite/concurrent/read,1,5,40149,8030,109,189,209,994,0
+zig_sqlite/concurrent/read,2,5,72498,14500,132,211,281,1026,0
+zig_sqlite/concurrent/read,4,5,188087,37617,98,167,209,749,0
+zig_sqlite/concurrent/read,8,5,268318,53664,141,222,262,1035,0
+zig_sqlite/concurrent/read,16,5,239405,47881,311,648,874,6659,0
+zig_sqlite/concurrent/write,1,5,206088,41218,16,34,52,9261,0
+zig_sqlite/concurrent/write,2,5,207272,41454,16,33,52,830546,0
+zig_sqlite/concurrent/write,4,5,204911,40982,17,34,53,2232383,0
+zig_sqlite/concurrent/write,8,5,209468,41894,17,35,71,1131019,0
+zig_sqlite/concurrent/write,16,5,197082,39416,17,41,595,1834180,0
+zig_sqlite/concurrent/mixed,1,5,59089,11818,83,131,168,4960,0
+zig_sqlite/concurrent/mixed,2,5,64074,12815,142,280,418,7798,0
+zig_sqlite/concurrent/mixed,4,5,130577,26115,131,275,470,18535,0
+zig_sqlite/concurrent/mixed,8,5,164773,32955,167,427,1317,79842,0
+zig_sqlite/concurrent/mixed,16,5,154366,30873,387,1175,2626,104796,0

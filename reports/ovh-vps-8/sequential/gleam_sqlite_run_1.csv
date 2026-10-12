@@ -1,0 +1,12 @@
+===> Fetching pc v1.15.0
+===> Analyzing applications...
+===> Compiling pc
+===> Analyzing applications...
+===> Compiling esqlite
+===> Compiling c_src/esqlite3_nif.c
+===> Compiling c_src/sqlite3/sqlite3.c
+===> Linking /home/debian/gleam_sqlite_benchmarks/gleam/build/dev/erlang/esqlite/priv/esqlite3_nif.so
+case,items,micros,us_per_item,check
+gleam_esqlite/app_request/seed_dummy_data,1,5229,5229,100
+gleam_esqlite/app_request/admin_item_edit,10000,3273119,327,27395000
+gleam_esqlite/app_request/admin_item_update,10000,891175,89,5550000

@@ -4,7 +4,7 @@ Results come from dedicated cloud VMs only, one report per machine. The
 [README](README.md) explains the workload, how the runners keep the comparison
 fair, and the caveats for Gleam and Bun.
 
-Every result so far ran on DigitalOcean CPU-Optimized Droplets. DigitalOcean
+Most results ran on DigitalOcean CPU-Optimized Droplets; one ran on an OVHcloud VPS. DigitalOcean
 assigns the CPU and doesn't let you choose it on this plan, and the CPU it
 assigned changed the results a lot: one Droplet ran SQLite twice as fast as
 another of the same size. Each report names the exact CPU it got. Expect
@@ -17,6 +17,13 @@ better than the absolute numbers.
 | DigitalOcean CPU-Optimized `c-2` | 2 | Intel Xeon Platinum 8168 | [reports/do-c-2-8168](reports/do-c-2-8168/README.md) |
 | DigitalOcean CPU-Optimized `c-4` (the same Droplet, resized) | 4 | Intel Xeon Platinum 8168 | [reports/do-c-4-8168](reports/do-c-4-8168/README.md) |
 | DigitalOcean CPU-Optimized `c-2` | 2 | Intel Xeon Platinum 8280 | [reports/do-c-2-8280](reports/do-c-2-8280/README.md) |
+| OVHcloud VPS (`vps-2027-model4`) | 8 | KVM-reported Haswell model; physical CPU not visible | [reports/ovh-vps-8](reports/ovh-vps-8/README.md) |
+
+The OVHcloud VPS reads at about the 8168's speed but commits the update
+transaction almost twice as fast, likely from storage, and it is the only
+8-vCPU machine. Its guest only sees a generic Haswell CPU model, so compare it
+by ratios to C. The comparison tables below cover the DigitalOcean machines;
+its own numbers are in its report.
 
 The two 8168 reports differ only in size, so together they show what more cores
 do. The 8280 ran SQLite about twice as fast as the 8168 at the same clock speed,

@@ -1,0 +1,16 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+go_ncruces/concurrent/read,1,5,23781,4756,198,275,373,811,0
+go_ncruces/concurrent/read,2,5,39776,7955,215,395,476,979,0
+go_ncruces/concurrent/read,4,5,84055,16811,217,377,422,898,0
+go_ncruces/concurrent/read,8,5,137850,27570,256,436,556,3259,0
+go_ncruces/concurrent/read,16,5,115521,23104,314,3987,8728,28445,0
+go_ncruces/concurrent/write,1,5,117273,23455,31,70,93,4877,0
+go_ncruces/concurrent/write,2,5,118657,23731,31,71,114,57235,0
+go_ncruces/concurrent/write,4,5,101622,20324,47,77,3416,78242,0
+go_ncruces/concurrent/write,8,5,109379,21876,33,88,11727,130355,0
+go_ncruces/concurrent/write,16,5,109319,21864,32,149,24190,140763,0
+go_ncruces/concurrent/mixed,1,5,26474,5295,181,337,401,5318,0
+go_ncruces/concurrent/mixed,2,5,45982,9196,197,391,494,8896,0
+go_ncruces/concurrent/mixed,4,5,77622,15524,225,457,591,5672,0
+go_ncruces/concurrent/mixed,8,5,100387,20077,367,565,2381,14039,0
+go_ncruces/concurrent/mixed,16,5,96316,19263,384,3909,9766,60294,0
