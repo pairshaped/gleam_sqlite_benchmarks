@@ -52,6 +52,12 @@ fell from about 15,900 with one worker to 12,500.
   writers was about 120 ms, against over a second for C and the cgo-based
   variants.
 
+These costs come from embedding SQLite in the process, where every query makes
+several calls into SQLite. A Go service that talks to a database server over
+the network spends most of its time on round trips instead, and Go's pure-Go
+drivers for those don't cross into C at all. This benchmark doesn't measure
+that case.
+
 For the same libraries on a different workload (bulk inserts, large scans and
 concurrent full-table reads), see
 [modernc.org/sqlite-bench](https://pkg.go.dev/modernc.org/sqlite-bench).
