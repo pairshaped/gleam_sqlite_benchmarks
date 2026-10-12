@@ -4,7 +4,9 @@
 
 - Plan: DigitalOcean CPU-Optimized, Regular Intel, `c-2` (2 dedicated vCPUs,
   4 GB RAM)
-- CPU: Intel Xeon Platinum 8280 @ 2.70 GHz
+- CPU: Intel Xeon Platinum 8280 @ 2.70 GHz, as assigned by DigitalOcean. The plan doesn't let you choose
+  the CPU, so another Droplet of the same plan may get different hardware and
+  different results.
 - OS: Debian 13.7, Linux 6.12, x86_64
 - Background services and timers stopped (see the top-level README)
 

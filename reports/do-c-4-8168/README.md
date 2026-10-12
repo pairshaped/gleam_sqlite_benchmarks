@@ -1,13 +1,16 @@
 # DigitalOcean CPU-Optimized, 4 vCPU, Xeon Platinum 8168
 
-The same Droplet as the [2-vCPU report on this CPU](../do-c-2-8168/README.md),
-resized to 4 vCPUs, so the two reports differ only in size.
+The same plan and CPU as the [2-vCPU report on this CPU](../do-c-2-8168/README.md),
+so the two reports show what more cores do. This Droplet started as an earlier
+2-vCPU 8168 Droplet and was resized to 4 vCPUs.
 
 ## Machine
 
 - Plan: DigitalOcean CPU-Optimized, Regular Intel, `c-4` (4 dedicated vCPUs,
   8 GB RAM), NYC1
-- CPU: Intel Xeon Platinum 8168 @ 2.70 GHz
+- CPU: Intel Xeon Platinum 8168 @ 2.70 GHz, as assigned by DigitalOcean. The plan doesn't let you choose
+  the CPU, so another Droplet of the same plan may get different hardware and
+  different results.
 - OS: Debian 13.7, Linux 6.12, x86_64
 - Background services and timers stopped (see the top-level README)
 
@@ -36,7 +39,7 @@ better.
 
 - Rust, Bun and Go land where they did on 2 vCPUs: one request at a time runs
   on one core, so the extra cores don't change their numbers.
-- Gleam improved the most: from 1,147 µs at 2 vCPUs to 333 µs here, with most
+- Gleam improved the most: from 995 µs at 2 vCPUs to 333 µs here, with most
   runs consistent (the read request ranged from 318 to 700 µs). With 4 vCPUs,
   the BEAM's dirty I/O scheduler handoffs are much cheaper, and the default and
   tuned rows now match.

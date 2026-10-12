@@ -4,6 +4,14 @@ Results come from dedicated cloud VMs only, one report per machine. The
 [README](README.md) explains the workload, how the runners keep the comparison
 fair, and the caveats for Gleam and Bun.
 
+Every result so far ran on DigitalOcean CPU-Optimized Droplets. DigitalOcean
+assigns the CPU and doesn't let you choose it on this plan, and the CPU it
+assigned changed the results a lot: one Droplet ran SQLite twice as fast as
+another of the same size. Each report names the exact CPU it got. Expect
+different numbers on other hardware, on a future Droplet of the same plan, or
+with other providers; the ratios between languages on the same machine travel
+better than the absolute numbers.
+
 | Machine | vCPUs | CPU | Report |
 | --- | ---: | --- | --- |
 | DigitalOcean CPU-Optimized `c-2` | 2 | Intel Xeon Platinum 8168 | [reports/do-c-2-8168](reports/do-c-2-8168/README.md) |
@@ -22,24 +30,25 @@ Read request, microseconds and ratio to C on the same machine:
 
 | Runner | 8168, 2 vCPUs | 8168, 4 vCPUs | 8280, 2 vCPUs |
 | --- | ---: | ---: | ---: |
-| C | 114 (1.0x) | 120 (1.0x) | 56 (1.0x) |
-| Zig | 116 (1.0x) | 120 (1.0x) | 58 (1.0x) |
-| Rust (`rusqlite`) | 123 (1.1x) | 124 (1.0x) | 62 (1.1x) |
-| Bun | 145 (1.3x) | 144 (1.2x) | 83 (1.5x) |
-| Go (`ncruces/go-sqlite3`) | 195 (1.7x) | 199 (1.7x) | 122 (2.2x) |
-| Gleam, default BEAM | 1,147 (10.0x) | 333 (2.8x) | 229 (4.1x) |
-| Gleam, `+SDio` = vCPUs | 432 (3.8x) | 332 (2.8x) | 290 (5.2x) |
+| C | 126 (1.0x) | 120 (1.0x) | 56 (1.0x) |
+| Zig | 124 (1.0x) | 120 (1.0x) | 58 (1.0x) |
+| Rust (`rusqlite`) | 129 (1.0x) | 124 (1.0x) | 62 (1.1x) |
+| Bun | 156 (1.2x) | 144 (1.2x) | 83 (1.5x) |
+| Go (`ncruces/go-sqlite3`) | 211 (1.7x) | 199 (1.7x) | 122 (2.2x) |
+| Gleam, default BEAM | 995 (7.9x) | 333 (2.8x) | 229 (4.1x) |
+| Gleam, `+SDio` = vCPUs | 1,281 (10.1x) | 332 (2.8x) | 290 (5.2x) |
 
 - Zig and Rust stay within about 10% of C everywhere.
 - On the 8168, adding cores changes nothing for one request at a time, except
-  for Gleam, which got 3.4 times faster: `esqlite` runs every SQLite call on a
+  for Gleam, which got 3 times faster: `esqlite` runs every SQLite call on a
   dirty I/O scheduler thread, and those handoffs get much cheaper with more
   cores.
 - Bun, Go and Gleam cost relatively more on the faster 8280. Their overhead per
   call is roughly fixed, so it's a bigger share when SQLite's own work is
   faster.
-- Capping Gleam's dirty I/O threads at the vCPU count helped a lot on the
-  2-vCPU 8168 and not at all on the 2-vCPU 8280.
+- Capping Gleam's dirty I/O threads at the vCPU count helped in an early scan
+  on one 2-vCPU 8168 Droplet, but not in the full runs on another 8168 or on
+  the 8280. On 2 vCPUs, Gleam's runs swing between fast and slow either way.
 
 ## Many workers at once
 
@@ -47,14 +56,14 @@ As a share of C's throughput on the same machine, with as many workers as vCPUs:
 
 | Runner | Reads (8168 2 / 4, 8280 2) | Writes (8168 2 / 4, 8280 2) | Mixed (8168 2 / 4, 8280 2) |
 | --- | ---: | ---: | ---: |
-| Zig | 99% / 103%, 98% | 97% / 100%, 100% | 99% / 98%, 106% |
-| Rust | 80% / 87%, 80% | 86% / 90%, 91% | 91% / 78%, 86% |
-| Bun | 68% / 77%, 68% | 77% / 79%, 71% | 85% / 71%, 77% |
-| Go | 53% / 47%, 48% | 53% / 58%, 55% | 79% / 56%, 56% |
-| Gleam, default BEAM | 10% / 15%, 11% | 6% / 23%, 7% | 14% / 22%, 12% |
+| Zig | 99% / 103%, 98% | 99% / 100%, 100% | 99% / 98%, 106% |
+| Rust | 81% / 87%, 80% | 92% / 90%, 91% | 90% / 78%, 86% |
+| Bun | 68% / 77%, 68% | 80% / 79%, 71% | 85% / 71%, 77% |
+| Go | 54% / 47%, 48% | 64% / 58%, 55% | 81% / 56%, 56% |
+| Gleam, default BEAM | 17% / 15%, 11% | 18% / 23%, 7% | 27% / 22%, 12% |
 
 - Zig matches C. Rust and Bun scale like C, keeping a roughly steady gap.
-- Go's reads plateau early: about 6,000 requests per second on the 2-vCPU 8168,
+- Go's reads plateau early: about 6,100 requests per second on the 2-vCPU 8168,
   11,500 on the 4-vCPU 8168 and 8,800 on the 8280, whatever the worker count.
 - SQLite allows one writer at a time, so write throughput stops growing at one
   or two workers in every language. Its busy timeout is also unfair: under
@@ -69,10 +78,9 @@ As a share of C's throughput on the same machine, with as many workers as vCPUs:
 - Bun's synchronous `bun:sqlite` means a write waiting on the lock blocks its
   whole JavaScript thread. The benchmark's worker threads hide that; a server
   has to plan around it with a single writer.
-- On both 2-vCPU Droplets, two workers barely beat one on reads, in every
-  language. The same 8168 Droplet resized to 4 vCPUs scaled cleanly at 2
-  workers, which points to how a 2-vCPU Droplet's vCPUs map to physical cores
-  rather than to SQLite.
+- On every 2-vCPU Droplet, two workers barely beat one on reads, in every
+  language. The 4-vCPU 8168 Droplet scaled cleanly at 2 workers, which points
+  to how a 2-vCPU Droplet's vCPUs map to physical cores rather than to SQLite.
 
 ## What it means
 

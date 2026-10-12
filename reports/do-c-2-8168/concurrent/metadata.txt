@@ -1,4 +1,4 @@
-timestamp_utc=2026-10-12T16:40:46Z
+timestamp_utc=2026-10-12T19:22:17Z
 rows=5000
 runs=3
 mode=concurrent
@@ -7,7 +7,7 @@ warmup=1
 workers=1,2,4
 suites=c rust zig go bun gleam_sqlite gleam_sqlite_sdio
 cpus=2
-git_rev=c0d51c7
+git_rev=a22f1d5
 
 Linux debian-c-2-nyc1 6.12.111+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.111-1 (2026-09-28) x86_64 GNU/Linux
 
@@ -54,7 +54,7 @@ Vulnerability Tsx async abort:           Not affected
 Vulnerability Vmscape:                   Not affected
 
                total        used        free      shared  buff/cache   available
-Mem:           3.8Gi       519Mi       973Mi       3.5Mi       2.7Gi       3.3Gi
+Mem:           3.8Gi       487Mi       1.0Gi       3.5Mi       2.7Gi       3.4Gi
 Swap:             0B          0B          0B
 
 nix (Determinate Nix 3.23.1) 2.35.2

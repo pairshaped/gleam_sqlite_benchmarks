@@ -163,11 +163,11 @@ So the Gleam runner runs twice:
 - `gleam_sqlite` uses the BEAM defaults. This is what an app gets unless
   someone tunes it, and it's the row to compare against the other languages.
 - `gleam_sqlite_sdio` sets `+SDio` to the machine's CPU count. On that 8168
-  Droplet it held runs at 423 to 435 µs. On a 2-vCPU Droplet with a Xeon
-  Platinum 8280 it didn't help: both rows stayed inconsistent, and the tuned
-  one was slower. Whether the cap helps depends on the machine. On a machine
-  with 10 or more CPUs the two rows should match, because the default already
-  fits.
+  Droplet it held runs at 423 to 435 µs, but it didn't help on two other 2-vCPU
+  Droplets, one with the same CPU and one with a Xeon Platinum 8280: both rows
+  stayed inconsistent there. Treat the cap as something to measure on your own
+  hardware rather than a fix. On a machine with 10 or more CPUs the two rows
+  should match, because the default already fits.
 
 The tuned row is a real production option, with one condition. `+SDio` matching
 the CPU count is a one-line setting in `vm.args` or `ERL_FLAGS`, but SQLite's
