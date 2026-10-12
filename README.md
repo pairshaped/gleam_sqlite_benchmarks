@@ -274,8 +274,11 @@ apt-get update && apt-get install -y git
 # keep them off across reboots and resizes. Leaves SSH, networking and journald.
 systemctl disable --now unattended-upgrades.service droplet-agent.service \
   apt-daily.timer apt-daily-upgrade.timer man-db.timer dpkg-db-backup.timer \
-  e2scrub_all.timer fstrim.timer droplet-agent-update.timer
+  e2scrub_all.timer fstrim.timer droplet-agent-update.timer apt-listchanges.timer
 systemctl mask --now systemd-tmpfiles-clean.timer
+# Images change; confirm nothing is still scheduled. Only masked timers, showing
+# no next run, should be left.
+systemctl list-timers
 curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
 . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 

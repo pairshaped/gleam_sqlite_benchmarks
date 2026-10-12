@@ -23,8 +23,7 @@ Microseconds per read request, lower is better:
 | Gleam, default BEAM | 1,147 | 333 | 2.8x |
 | Gleam, `+SDio` = vCPUs | 432 | 332 | 2.8x |
 
-- Zig and Rust add almost nothing on top of SQLite's C API, and Zig still
-  matches C with its runtime safety checks on (`ReleaseSafe`, 4-vCPU run).
+- Zig and Rust add almost nothing on top of SQLite's C API.
 - Bun adds about 20 to 30%, and Go about 70% on reads with the fastest Go
   library.
 - Every runner except Gleam is the same on 2 and 4 vCPUs, since one request

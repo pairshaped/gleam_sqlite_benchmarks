@@ -14,7 +14,7 @@ It landed on the same CPU model, so the two reports differ only in size.
 ## Toolchains
 
 All from `flake.nix`: SQLite 3.51.0 (C, Zig, Rust), Rust 1.99.0 with
-rusqlite 0.40.2, Zig 0.16.0 built with `ReleaseSafe`, Go 1.26.8 with
+rusqlite 0.40.2, Zig 0.16.0, Go 1.26.8 with
 ncruces/go-sqlite3 0.35.6 (its own SQLite 3.53.4), Bun 1.4.3 (its embedded
 SQLite is also 3.51.0), Gleam 1.19.2 on Erlang/OTP 28 with esqlite 0.9.0 (its
 bundled SQLite is 3.50.4). The tuned Gleam row uses `+SDio 4`.
@@ -34,8 +34,6 @@ better.
 | Gleam, default BEAM | 333 | 2.8x | 108 | 2.7x |
 | Gleam, `+SDio 4` | 332 | 2.8x | 104 | 2.6x |
 
-- Zig with its runtime safety checks on still matches C, so the checks cost
-  nothing measurable on this workload.
 - Rust, Bun and Go land where they did on 2 vCPUs. One request at a time runs
   on one core, so the extra cores don't change their numbers.
 - Gleam improved the most: from 1,147 µs on 2 vCPUs to 333 µs here, with most
