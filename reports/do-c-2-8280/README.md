@@ -1,4 +1,4 @@
-# DigitalOcean CPU-Optimized, 2 vCPU
+# DigitalOcean CPU-Optimized, 2 vCPU, Xeon Platinum 8280
 
 ## Machine
 
@@ -8,10 +8,11 @@
 - OS: Debian 13.7, Linux 6.12, x86_64
 - Background services and timers stopped (see the top-level README)
 
-This Droplet ran SQLite about twice as fast as the Xeon Platinum 8168 Droplet
-behind the [4-vCPU report](../do-c-4/README.md): C took 56 µs per read request
-here against 120 µs there, at the same clock speed. Compare the two reports by
-their ratios to C, not their absolute numbers.
+This Droplet ran SQLite about twice as fast as the same plan on a Xeon Platinum
+8168 ([2-vCPU](../do-c-2-8168/README.md), [4-vCPU](../do-c-4-8168/README.md)):
+C took 56 µs per read request here against 114 µs on the 8168, at the same
+clock speed. Compare reports across CPUs by each runner's ratio to C, not by
+absolute numbers.
 
 ## Toolchains
 
@@ -42,7 +43,8 @@ better.
   so it's a bigger share when SQLite's own work takes less time.
 - Gleam was inconsistent again on the read request: five runs ranged from 228
   to 676 µs with the default BEAM and from 229 to 492 µs with `+SDio 2`. Capping
-  the dirty I/O threads didn't help on this machine.
+  the dirty I/O threads didn't help on this machine, unlike on the
+  [8168](../do-c-2-8168/README.md).
 
 ## Concurrent mode
 
@@ -91,7 +93,7 @@ The full summary, including p99 latency tables, is in
 ### What the concurrent numbers say
 
 - Two workers barely beat one on reads, in every native runner and Bun, while
-  four workers reach about 1.7x. The 4-vCPU report scaled cleanly at 2 workers,
+  four workers reach about 1.7x. The 4-vCPU Droplet scaled cleanly at 2 workers,
   so this most likely comes from how a 2-vCPU Droplet's vCPUs map to physical
   cores, such as two hyperthreads of one core.
 - Write throughput doesn't grow with workers at all, because SQLite allows one
@@ -106,49 +108,6 @@ The full summary, including p99 latency tables, is in
   I/O threads, so the writer holding the lock couldn't commit until the
   5-second busy timeouts expired. This is the hazard described in the
   top-level README's Gleam caveats.
-
-## Earlier scans on a Xeon Platinum 8168 Droplet
-
-These ran on an earlier `c-2` Droplet with the slower Xeon Platinum 8168, the
-same CPU as the 4-vCPU report, before this one replaced it. They compare
-settings within one machine, so their absolute numbers don't carry over.
-
-### Gleam dirty I/O scheduler scan
-
-A scan with an earlier build of the Gleam runner:
-statements cached, but `BEGIN` and `COMMIT` not yet cached, 3,000 requests per
-run. The read request, one value per run:
-
-| BEAM setting | Read request (µs) |
-| --- | --- |
-| Default (10 dirty I/O threads) | 1,286, 423, 429 |
-| Busy-waiting off (`+sbwt none +sbwtdcpu none +sbwtdio none`) | 1,439, 1,441, 1,398 |
-| `+SDio 1` | 432, 419, 432 |
-| `+SDio 2` (one per vCPU) | 435, 425, 423, 425 |
-| `+SDio 4` | 1,271, 416, 1,289, 1,286 |
-| `+sbt db` (scheduler pinning) | 429, 584, 1,277 |
-| `+S 1 +SDio 1 +SDcpu 1` | 1,269, 1,267, 1,269 |
-
-More dirty I/O threads than vCPUs gives a fast or slow run depending on whether a
-spinning thread catches each handoff. Turning busy-waiting off makes every run
-slow, so the spinning is what produces the fast runs. On that machine, one dirty
-I/O thread per vCPU kept runs fast and consistent; on the 8280 Droplet above it
-didn't. See the top-level README before applying this to an app with several
-writer connections.
-
-### esqlite's `-Os` build
-
-`esqlite` compiles its bundled SQLite with `-Os`. Rebuilding it with the same
-flags but `-O2`, then running Gleam with `+SDio 2` (10,000 requests, 3 runs
-each, µs per request):
-
-| esqlite build | Read request | Update |
-| --- | --- | --- |
-| `-Os` (as shipped) | 1,016, 1,270, 462 | 120, 346, 112 |
-| `-O2` | 383, 384, 1,245 | 102, 100, 299 |
-
-In fast runs, `-O2` cut the read request by about 17% and the update by about
-12%. It didn't fix the slow runs: one `-O2` run still took 1,245 µs.
 
 ## Raw data
 

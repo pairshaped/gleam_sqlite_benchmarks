@@ -1,0 +1,10 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+gleam_esqlite/concurrent/read,1,5,3772,754,1320,1413,1494,2052,0
+gleam_esqlite/concurrent/read,2,5,5474,1095,1823,2065,2197,2832,0
+gleam_esqlite/concurrent/read,4,5,12372,2474,1595,1977,2202,3409,0
+gleam_esqlite/concurrent/write,1,5,16148,3230,279,321,413,62162,0
+gleam_esqlite/concurrent/write,2,5,10085,2017,318,2986,6241,86913,0
+gleam_esqlite/concurrent/write,4,5,10885,2177,313,3616,18850,731426,0
+gleam_esqlite/concurrent/mixed,1,5,4715,943,1130,1201,1274,1592,0
+gleam_esqlite/concurrent/mixed,2,5,6020,1204,1759,2058,2222,8217,0
+gleam_esqlite/concurrent/mixed,4,5,14318,2864,1449,1891,2141,22941,0

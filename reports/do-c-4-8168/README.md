@@ -1,9 +1,7 @@
-# DigitalOcean CPU-Optimized, 4 vCPU
+# DigitalOcean CPU-Optimized, 4 vCPU, Xeon Platinum 8168
 
-This Droplet started as a 2-vCPU Droplet with the same Xeon Platinum 8168 and was
-resized to 4 vCPUs. The [2-vCPU report](../do-c-2/README.md) comes from a later
-Droplet with a faster Xeon Platinum 8280, so compare the two reports by their
-ratios to C, not their absolute numbers.
+The same Droplet as the [2-vCPU report on this CPU](../do-c-2-8168/README.md),
+resized to 4 vCPUs, so the two reports differ only in size.
 
 ## Machine
 
@@ -36,9 +34,8 @@ better.
 | Gleam, default BEAM | 333 | 2.8x | 108 | 2.7x |
 | Gleam, `+SDio 4` | 332 | 2.8x | 104 | 2.6x |
 
-- Against the same Droplet's earlier run at 2 vCPUs, Rust, Bun and Go landed
-  where they had: one request at a time runs on one core, so the extra cores
-  don't change their numbers.
+- Rust, Bun and Go land where they did on 2 vCPUs: one request at a time runs
+  on one core, so the extra cores don't change their numbers.
 - Gleam improved the most: from 1,147 µs at 2 vCPUs to 333 µs here, with most
   runs consistent (the read request ranged from 318 to 700 µs). With 4 vCPUs,
   the BEAM's dirty I/O scheduler handoffs are much cheaper, and the default and
