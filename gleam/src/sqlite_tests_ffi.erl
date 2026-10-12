@@ -2,34 +2,17 @@
 -export([
     argv/0,
     monotonic_microsecond/0,
-    sleep_millisecond/1,
     seed_app_request_data/1,
     app_admin_item_edit_requests/2,
     app_admin_item_update_requests/2,
-    start_heartbeat/1,
-    stop_heartbeat/1,
-    start_read_file_probe/0,
-    start_sendfile_probe/0,
-    stop_read_file_probe/1,
-    stop_sendfile_probe/1
+    concurrent_main/4
 ]).
-
--include_lib("kernel/include/file.hrl").
-
--define(SENDFILE_PROBE_PATH, "sqlite_tests_sendfile_probe.bin").
--define(SENDFILE_PROBE_SIZE, 262144).
--define(READ_FILE_PROBE_PATH, "sqlite_tests_read_file_probe.bin").
--define(READ_FILE_PROBE_SIZE, 262144).
 
 argv() ->
     [unicode:characters_to_binary(Arg) || Arg <- init:get_plain_arguments()].
 
 monotonic_microsecond() ->
     erlang:monotonic_time(microsecond).
-
-sleep_millisecond(Milliseconds) ->
-    timer:sleep(Milliseconds),
-    nil.
 
 seed_app_request_data(Connection) ->
     Sql = <<"drop table if exists app_users;
@@ -213,8 +196,15 @@ app_admin_item_edit_request(Connection, _I, EventId) ->
     run_integer_queries(Connection, Queries, 0).
 
 app_admin_item_update_request(Connection, I, EventId) ->
-    case esqlite3:exec(Connection, <<"begin transaction;">>) of
-        ok ->
+    app_admin_item_update_request(Connection, <<"begin">>, I, EventId).
+
+%% Begin is <<"begin">> for the sequential case and <<"begin immediate">> when
+%% several workers write at once (see run_concurrent/5).
+app_admin_item_update_request(Connection, Begin, I, EventId) ->
+    %% BEGIN and COMMIT go through the statement cache too, so every statement
+    %% in the request is reused, like the other runners.
+    case cached_q(Connection, Begin, []) of
+        [] ->
             Queries = [
                 {<<"select id from app_users where id = ?">>, [1]},
                 {<<"select id from app_clubs where subdomain = ?">>, [<<"demo">>]},
@@ -225,13 +215,13 @@ app_admin_item_update_request(Connection, I, EventId) ->
             ],
             case run_integer_queries(Connection, Queries, 0) of
                 {ok, Check} ->
-                    case esqlite3:q(Connection, <<"update app_events set counter = counter + 1, name = ? where id = ?">>, [
+                    case cached_q(Connection, <<"update app_events set counter = counter + 1, name = ? where id = ?">>, [
                         <<"Updated Event ", (integer_to_binary(I))/binary>>,
                         EventId
                     ]) of
                         [] ->
-                            case esqlite3:exec(Connection, <<"commit;">>) of
-                                ok -> {ok, Check + EventId};
+                            case cached_q(Connection, <<"commit">>, []) of
+                                [] -> {ok, Check + EventId};
                                 {error, Code} -> to_sqlight_error(Connection, {app_update_commit_failed, Code})
                             end;
                         {error, Code} ->
@@ -252,13 +242,56 @@ app_admin_item_update_request(Connection, I, EventId) ->
 run_integer_queries(_Connection, [], Check) ->
     {ok, Check};
 run_integer_queries(Connection, [{Sql, Bindings} | Rest], Check) ->
-    case esqlite3:q(Connection, Sql, Bindings) of
+    case cached_q(Connection, Sql, Bindings) of
         [[Value]] when is_integer(Value) ->
             run_integer_queries(Connection, Rest, Check + Value);
         {error, Code} ->
             to_sqlight_error(Connection, {app_request_query_failed, Sql, Code});
         Rows ->
             generic_sqlight_error({app_request_wrong_result, Sql, Rows})
+    end.
+
+%% esqlite3:q/3 compiles the statement on every call. Keep one compiled
+%% statement per connection and SQL text in the process dictionary instead, so
+%% this path caches statements like the Rust and Bun runners. The cache only
+%% stays warm because this runner handles every request in one process; a web
+%% server that runs each request in its own process would start cold each time.
+cached_q(Connection, Sql, Bindings) ->
+    case cached_statement(Connection, Sql) of
+        {ok, Statement} ->
+            Result =
+                case esqlite3:bind(Statement, Bindings) of
+                    ok -> fetch_rows(Statement, []);
+                    {error, _} = Error -> Error
+                end,
+            _ = esqlite3:reset(Statement),
+            Result;
+        {error, _} = Error ->
+            Error
+    end.
+
+cached_statement(Connection, Sql) ->
+    Key = {sqlite_tests_statement, Connection, Sql},
+    case get(Key) of
+        undefined ->
+            case esqlite3:prepare(Connection, Sql) of
+                {ok, Statement} = Prepared ->
+                    put(Key, Statement),
+                    Prepared;
+                {error, _} = Error ->
+                    Error
+            end;
+        Statement ->
+            {ok, Statement}
+    end.
+
+fetch_rows(Statement, Rows) ->
+    case esqlite3:step(Statement) of
+        Row when is_list(Row) -> fetch_rows(Statement, [Row | Rows]);
+        '$done' -> lists:reverse(Rows);
+        %% The busy timeout expired without getting the lock.
+        '$busy' -> {error, busy};
+        {error, _} = Error -> Error
     end.
 
 to_sqlight_error(Connection, Code) when is_integer(Code) ->
@@ -271,257 +304,113 @@ generic_sqlight_error(Reason) ->
     Message = unicode:characters_to_binary(io_lib:format("prepared benchmark failed: ~p", [Reason])),
     {error, {sqlight_error, generic_error, Message, -1}}.
 
-start_heartbeat(PeriodMicros) ->
-    spawn(fun() ->
-        heartbeat_loop(
-            PeriodMicros,
-            erlang:monotonic_time(microsecond),
-            0,
-            0,
-            0
-        )
-    end).
+%% Concurrent mode: W workers, each a BEAM process with its own connection and
+%% statement cache, run one workload for a fixed time. Every worker opens its
+%% connection before the clock starts, warms up, then records the latency of
+%% each request that starts inside the measured window. Writes use BEGIN
+%% IMMEDIATE: a deferred transaction that reads and then writes fails at once
+%% with SQLITE_BUSY if another worker committed in between, without waiting on
+%% busy_timeout.
 
-stop_heartbeat(Pid) ->
-    Ref = erlang:monitor(process, Pid),
-    Pid ! {stop, self(), Ref},
-    receive
-        {heartbeat, Ref, Count, MaxDelay, AvgDelay} ->
-            erlang:demonitor(Ref, [flush]),
-            {Count, MaxDelay, AvgDelay};
-        {'DOWN', Ref, process, Pid, Reason} ->
-            erlang:error({heartbeat_down, Reason})
-    end.
-
-heartbeat_loop(PeriodMicros, LastWake, Count, TotalDelay, MaxDelay) ->
-    receive
-        {stop, From, Ref} ->
-            AvgDelay = average_delay(TotalDelay, Count),
-            From ! {heartbeat, Ref, Count, MaxDelay, AvgDelay}
-    after heartbeat_timeout_millisecond(PeriodMicros) ->
-        Now = erlang:monotonic_time(microsecond),
-        Delay = max(0, Now - LastWake - PeriodMicros),
-        heartbeat_loop(
-            PeriodMicros,
-            Now,
-            Count + 1,
-            TotalDelay + Delay,
-            max(MaxDelay, Delay)
-        )
-    end.
-
-heartbeat_timeout_millisecond(PeriodMicros) when PeriodMicros =< 1000 ->
-    1;
-heartbeat_timeout_millisecond(PeriodMicros) ->
-    (PeriodMicros + 999) div 1000.
-
-average_delay(_TotalDelay, 0) ->
-    0;
-average_delay(TotalDelay, Count) ->
-    TotalDelay div Count.
-
-start_read_file_probe() ->
-    Parent = self(),
-    Ref = make_ref(),
-    {Pid, MonitorRef} = spawn_monitor(fun() ->
-        read_file_probe_init(Parent, Ref)
-    end),
-    receive
-        {read_file_probe_ready, Ref, Pid} ->
-            erlang:demonitor(MonitorRef, [flush]),
-            Pid;
-        {'DOWN', MonitorRef, process, Pid, Reason} ->
-            erlang:error({read_file_probe_down, Reason})
-    end.
-
-stop_read_file_probe(Pid) ->
-    Ref = erlang:monitor(process, Pid),
-    Pid ! {stop, self(), Ref},
-    receive
-        {read_file_probe, Ref, Attempts, Failures, MaxLatency, AvgLatency, BytesRead, LastFailureCode} ->
-            erlang:demonitor(Ref, [flush]),
-            {Attempts, Failures, MaxLatency, AvgLatency, BytesRead, LastFailureCode};
-        {'DOWN', Ref, process, Pid, Reason} ->
-            erlang:error({read_file_probe_down, Reason})
-    end.
-
-read_file_probe_init(Parent, Ref) ->
-    ok = ensure_read_file_probe_file(?READ_FILE_PROBE_PATH),
-    Parent ! {read_file_probe_ready, Ref, self()},
-    read_file_probe_loop(?READ_FILE_PROBE_PATH, 0, 0, 0, 0, 0, 0).
-
-read_file_probe_loop(Path, Attempts, Failures, TotalLatency, MaxLatency, BytesRead, LastFailureCode) ->
-    receive
-        {stop, From, Ref} ->
-            AvgLatency = average_delay(TotalLatency, Attempts),
-            From ! {read_file_probe, Ref, Attempts, Failures, MaxLatency, AvgLatency, BytesRead, LastFailureCode}
-    after 0 ->
-        {AttemptFailures, Latency, AttemptBytes, FailureCode} = read_file_probe_attempt(Path),
-        NextFailureCode = case FailureCode of
-            0 -> LastFailureCode;
-            _ -> FailureCode
+concurrent_main(Path, DurationArg, WarmupArg, WorkersArg) ->
+    Duration = to_number(DurationArg),
+    Warmup = to_number(WarmupArg),
+    Workers = [binary_to_integer(W) || W <- binary:split(WorkersArg, <<",">>, [global])],
+    [file:delete(<<Path/binary, Suffix/binary>>) || Suffix <- [<<>>, <<"-wal">>, <<"-shm">>]],
+    Seed = open_connection(Path),
+    {ok, _} = seed_app_request_data(Seed),
+    ok = esqlite3:close(Seed),
+    io:format("case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors~n"),
+    lists:foreach(
+        fun(Workload) ->
+            [run_concurrent(Path, Workload, Count, Duration, Warmup) || Count <- Workers]
         end,
-        read_file_probe_loop(
-            Path,
-            Attempts + 1,
-            Failures + AttemptFailures,
-            TotalLatency + Latency,
-            max(MaxLatency, Latency),
-            BytesRead + AttemptBytes,
-            NextFailureCode
-        )
-    end.
-
-read_file_probe_attempt(Path) ->
-    Start = erlang:monotonic_time(microsecond),
-    ReadResult = file:read_file(Path),
-    Latency = erlang:monotonic_time(microsecond) - Start,
-    case ReadResult of
-        {ok, Bytes} ->
-            {0, Latency, byte_size(Bytes), 0};
-        {error, Reason} ->
-            {1, Latency, 0, read_file_failure_code(Reason)}
-    end.
-
-read_file_failure_code(enoent) -> 2;
-read_file_failure_code(eacces) -> 13;
-read_file_failure_code(_Reason) -> 8.
-
-start_sendfile_probe() ->
-    Parent = self(),
-    Ref = make_ref(),
-    {Pid, MonitorRef} = spawn_monitor(fun() ->
-        sendfile_probe_init(Parent, Ref)
-    end),
-    receive
-        {sendfile_probe_ready, Ref, Pid} ->
-            erlang:demonitor(MonitorRef, [flush]),
-            Pid;
-        {'DOWN', MonitorRef, process, Pid, Reason} ->
-            erlang:error({sendfile_probe_down, Reason})
-    end.
-
-stop_sendfile_probe(Pid) ->
-    Ref = erlang:monitor(process, Pid),
-    Pid ! {stop, self(), Ref},
-    receive
-        {sendfile_probe, Ref, Attempts, Failures, MaxLatency, AvgLatency, BytesSent, LastFailureCode} ->
-            erlang:demonitor(Ref, [flush]),
-            {Attempts, Failures, MaxLatency, AvgLatency, BytesSent, LastFailureCode};
-        {'DOWN', Ref, process, Pid, Reason} ->
-            erlang:error({sendfile_probe_down, Reason})
-    end.
-
-sendfile_probe_init(Parent, Ref) ->
-    ok = ensure_sendfile_probe_file(?SENDFILE_PROBE_PATH),
-    {ok, ListenSocket} = gen_tcp:listen(0, [
-        binary,
-        {packet, raw},
-        {active, false},
-        {ip, {127, 0, 0, 1}},
-        {reuseaddr, true}
-    ]),
-    {ok, Port} = inet:port(ListenSocket),
-    {ok, ClientSocket} = gen_tcp:connect(
-        {127, 0, 0, 1},
-        Port,
-        [binary, {packet, raw}, {active, false}, {nodelay, true}],
-        1000
+        [read, write, mixed]
     ),
-    {ok, ServerSocket} = gen_tcp:accept(ListenSocket, 1000),
-    gen_tcp:close(ListenSocket),
-    DrainPid = spawn(fun() ->
-        receive
-            {sendfile_probe_socket, Socket} ->
-                drain_sendfile_socket(Socket)
-        end
-    end),
-    ok = gen_tcp:controlling_process(ServerSocket, DrainPid),
-    DrainPid ! {sendfile_probe_socket, ServerSocket},
-    Parent ! {sendfile_probe_ready, Ref, self()},
-    sendfile_probe_loop(?SENDFILE_PROBE_PATH, ClientSocket, DrainPid, 0, 0, 0, 0, 0, 0).
+    nil.
 
-sendfile_probe_loop(Path, ClientSocket, DrainPid, Attempts, Failures, TotalLatency, MaxLatency, BytesSent, LastFailureCode) ->
-    receive
-        {stop, From, Ref} ->
-            gen_tcp:close(ClientSocket),
-            exit(DrainPid, kill),
-            AvgLatency = average_delay(TotalLatency, Attempts),
-            From ! {sendfile_probe, Ref, Attempts, Failures, MaxLatency, AvgLatency, BytesSent, LastFailureCode}
-    after 0 ->
-        {AttemptFailures, Latency, AttemptBytes, FailureCode} = sendfile_probe_attempt(Path, ClientSocket),
-        NextFailureCode = case FailureCode of
-            0 -> LastFailureCode;
-            _ -> FailureCode
-        end,
-        sendfile_probe_loop(
-            Path,
-            ClientSocket,
-            DrainPid,
-            Attempts + 1,
-            Failures + AttemptFailures,
-            TotalLatency + Latency,
-            max(MaxLatency, Latency),
-            BytesSent + AttemptBytes,
-            NextFailureCode
-        )
+to_number(Binary) ->
+    try binary_to_float(Binary)
+    catch error:badarg -> float(binary_to_integer(Binary))
     end.
 
-sendfile_probe_attempt(Path, Socket) ->
+open_connection(Path) ->
+    {ok, Connection} = esqlite3:open(binary_to_list(Path)),
+    %% Set the busy timeout before anything that takes a lock, so connections
+    %% opened at the same moment wait for each other instead of failing.
+    ok = esqlite3:exec(Connection, <<"pragma busy_timeout = 5000;">>),
+    ok = esqlite3:exec(Connection, <<"pragma journal_mode = WAL;">>),
+    ok = esqlite3:exec(Connection, <<"pragma synchronous = NORMAL;">>),
+    ok = esqlite3:exec(Connection, <<"pragma foreign_keys = ON;">>),
+    Connection.
+
+run_concurrent(Path, Workload, Count, Duration, Warmup) ->
+    Coordinator = self(),
+    Pids = [
+        spawn_link(fun() -> concurrent_worker(Coordinator, Path, Workload, Index) end)
+     || Index <- lists:seq(0, Count - 1)
+    ],
+    [receive {ready, Pid} -> ok end || Pid <- Pids],
+    WarmUntil = erlang:monotonic_time(microsecond) + round(Warmup * 1000000),
+    MeasureUntil = WarmUntil + round(Duration * 1000000),
+    [Pid ! {go, WarmUntil, MeasureUntil} || Pid <- Pids],
+    Results = [receive {latencies, Pid, L, E} -> {L, E} end || Pid <- Pids],
+    Latencies = lists:append([L || {L, _} <- Results]),
+    Errors = lists:sum([E || {_, E} <- Results]),
+    Sorted = list_to_tuple(lists:sort(Latencies)),
+    Total = tuple_size(Sorted),
+    Percentile = fun
+        (_) when Total =:= 0 -> 0;
+        (P) -> element(trunc((Total - 1) * P) + 1, Sorted)
+    end,
+    Max = case Total of 0 -> 0; _ -> element(Total, Sorted) end,
+    io:format("gleam_esqlite/concurrent/~s,~b,~s,~b,~b,~b,~b,~b,~b,~b~n", [
+        Workload, Count, format_seconds(Duration), Total, round(Total / Duration),
+        Percentile(0.50), Percentile(0.95), Percentile(0.99), Max, Errors
+    ]).
+
+format_seconds(Seconds) when Seconds == trunc(Seconds) -> integer_to_list(trunc(Seconds));
+format_seconds(Seconds) -> float_to_list(Seconds, [{decimals, 3}, compact]).
+
+concurrent_worker(Coordinator, Path, Workload, Index) ->
+    Connection = open_connection(Path),
+    Coordinator ! {ready, self()},
+    receive {go, WarmUntil, MeasureUntil} -> ok end,
+    %% Offset each worker's event ids so workers don't all hit the same rows.
+    {Latencies, Errors} =
+        concurrent_loop(Connection, Workload, Index * 37, WarmUntil, MeasureUntil, [], 0),
+    ok = esqlite3:close(Connection),
+    Coordinator ! {latencies, self(), Latencies, Errors}.
+
+%% A request that fails, in practice a write whose busy timeout expired, counts
+%% as an error instead of stopping the run. Other runners never hit this: their
+%% lock waits sleep on their own OS threads. Here every lock wait sleeps on a
+%% dirty I/O scheduler thread, and once waiting writers occupy all of them, the
+%% writer holding the lock can't run its COMMIT until the timeouts expire.
+concurrent_loop(Connection, Workload, Sequence0, WarmUntil, MeasureUntil, Acc, Errors) ->
     Start = erlang:monotonic_time(microsecond),
-    SendResult = file:sendfile(Path, Socket),
-    Latency = erlang:monotonic_time(microsecond) - Start,
-    case SendResult of
-        {ok, BytesSent} ->
-            {0, Latency, BytesSent, 0};
-        {error, Reason} ->
-            {1, Latency, 0, sendfile_failure_code(Reason)}
+    case Start >= MeasureUntil of
+        true ->
+            {Acc, Errors};
+        false ->
+            Sequence = Sequence0 + 1,
+            EventId = ((Sequence - 1) rem 100) + 1,
+            Write = Workload =:= write orelse (Workload =:= mixed andalso Sequence rem 10 =:= 0),
+            Result =
+                case Write of
+                    true -> app_admin_item_update_request(Connection, <<"begin immediate">>, Sequence, EventId);
+                    false -> app_admin_item_edit_request(Connection, Sequence, EventId)
+                end,
+            Measured = Start >= WarmUntil,
+            case Result of
+                {ok, _} when Measured ->
+                    Latency = erlang:monotonic_time(microsecond) - Start,
+                    concurrent_loop(Connection, Workload, Sequence, WarmUntil, MeasureUntil, [Latency | Acc], Errors);
+                {ok, _} ->
+                    concurrent_loop(Connection, Workload, Sequence, WarmUntil, MeasureUntil, Acc, Errors);
+                %% Count errors during warm-up too: a stalled request that started
+                %% there would otherwise leave no trace.
+                {error, _} ->
+                    concurrent_loop(Connection, Workload, Sequence, WarmUntil, MeasureUntil, Acc, Errors + 1)
+            end
     end.
-
-sendfile_failure_code(timeout) -> 6;
-sendfile_failure_code(closed) -> 11;
-sendfile_failure_code(enotconn) -> 13;
-sendfile_failure_code(_Reason) -> 8.
-
-drain_sendfile_socket(Socket) ->
-    case gen_tcp:recv(Socket, 0) of
-        {ok, Data} ->
-            _ = byte_size(Data),
-            drain_sendfile_socket(Socket);
-        {error, closed} ->
-            ok;
-        {error, _Reason} ->
-            ok
-    end.
-
-ensure_sendfile_probe_file(Path) ->
-    case file:read_file_info(Path) of
-        {ok, #file_info{size = ?SENDFILE_PROBE_SIZE}} ->
-            ok;
-        {ok, _Info} ->
-            write_sendfile_probe_file(Path);
-        {error, enoent} ->
-            write_sendfile_probe_file(Path);
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-write_sendfile_probe_file(Path) ->
-    Chunk = <<"0123456789abcdef">>,
-    file:write_file(Path, binary:copy(Chunk, ?SENDFILE_PROBE_SIZE div byte_size(Chunk))).
-
-ensure_read_file_probe_file(Path) ->
-    case file:read_file_info(Path) of
-        {ok, #file_info{size = ?READ_FILE_PROBE_SIZE}} ->
-            ok;
-        {ok, _Info} ->
-            write_read_file_probe_file(Path);
-        {error, enoent} ->
-            write_read_file_probe_file(Path);
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-write_read_file_probe_file(Path) ->
-    Chunk = <<"0123456789abcdef">>,
-    file:write_file(Path, binary:copy(Chunk, ?READ_FILE_PROBE_SIZE div byte_size(Chunk))).

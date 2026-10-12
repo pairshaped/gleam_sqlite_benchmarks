@@ -6,18 +6,28 @@ erl_crash.dump
 /gleam/build
 /gleam/*.sqlite3
 /gleam/*.sqlite3-*
-/gleam/*_probe.bin
 
 /rust/target
 /rust/*.sqlite3
 /rust/*.sqlite3-*
-/rust/*_probe.bin
 
 /bun/node_modules
+/c/benchmark
+/c/*.sqlite3
+/c/*.sqlite3-*
+
+/zig/benchmark
+/zig/*.sqlite3
+/zig/*.sqlite3-*
+
+/go/benchmark
+/go/*.sqlite3
+/go/*.sqlite3-*
+
 /bun/*.sqlite3
 /bun/*.sqlite3-*
 
-/ruby/*.sqlite3
-/ruby/*.sqlite3-*
 
 /benchmark-results
+
+/result

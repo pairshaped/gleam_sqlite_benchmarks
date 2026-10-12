@@ -1,0 +1,10 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+rust_rusqlite/concurrent/read,1,5,41493,8299,116,144,179,316,0
+rust_rusqlite/concurrent/read,2,5,45658,9132,217,269,298,571,0
+rust_rusqlite/concurrent/read,4,5,80408,16082,121,150,4149,12077,0
+rust_rusqlite/concurrent/write,1,5,121238,24248,18,29,38,131879,0
+rust_rusqlite/concurrent/write,2,5,155549,31110,22,42,113,39741,0
+rust_rusqlite/concurrent/write,4,5,163076,32615,22,41,85,1446259,0
+rust_rusqlite/concurrent/mixed,1,5,55408,11082,90,125,154,28555,0
+rust_rusqlite/concurrent/mixed,2,5,40915,8183,163,311,3047,33189,0
+rust_rusqlite/concurrent/mixed,4,5,73438,14688,89,1069,3089,28255,0

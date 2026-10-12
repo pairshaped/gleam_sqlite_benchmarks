@@ -1,71 +1,32 @@
 # Rust SQLite
 
-This bucket runs the request-shaped SQLite benchmark through several Rust paths:
+This runner drives SQLite from Rust through `rusqlite`, linked against the
+flake's shared SQLite 3.51.0 rather than a bundled copy.
 
-- `rust_rusqlite/*`: direct `rusqlite` calls.
-- `rust_rusqlite_query_only/*`: direct `rusqlite` reads through a connection
-  with `PRAGMA query_only = ON`.
-- `rust_marmot/*`: generated `rusqlite` calls from colocated `.sql` files.
-- `rust_sqlx/*`: `sqlx` with a `SqlitePool` and `max_connections(5)`.
-- `rust_sqlx_pool1/*`: same SQLx pool path with `max_connections(1)`.
-- `rust_sqlx_conn/*`: SQLx using one acquired pooled connection for the request
-  loop.
-- `rust_sqlx_direct/*`: SQLx using a direct `SqliteConnection`.
-- `rust_sqlx_direct_tuned/*`: direct SQLx connection with worker/cache knobs
-  adjusted.
-- `rust_sqlx_manual_tx/*`: direct SQLx connection with manual `BEGIN`/`COMMIT`
-  for the update request.
-
-Run it in release mode:
+Run it in release mode inside the Nix shell. Debug-mode numbers aren't useful
+for this comparison.
 
 ```sh
 cargo run --release --quiet -- 5000
 ```
 
-The runner creates `rust_benchmark.sqlite3` in this directory and prints:
+It creates `rust_benchmark.sqlite3` in this directory and prints:
 
-```text
-case,items,micros,us_per_item,check
-```
+- `rust_rusqlite/app_request/*`: the three benchmark cases.
+- `rust_rusqlite_query_only/app_request/admin_item_edit`: the read request on a
+  connection with `PRAGMA query_only = ON`, after checking that a write through
+  that connection is rejected.
 
-Cases:
+Every query goes through `prepare_cached`, and `BEGIN` and `COMMIT` run as
+cached statements too. `Connection::transaction` would send them through
+`execute_batch`, which parses them again on every request.
 
-- `rust_rusqlite/app_request/seed_dummy_data`
-- `rust_rusqlite/app_request/admin_item_edit`
-- `rust_rusqlite_query_only/app_request/admin_item_edit`
-- `rust_rusqlite/app_request/admin_item_update`
-- `rust_marmot/app_request/seed_dummy_data`
-- `rust_marmot/app_request/admin_item_edit`
-- `rust_marmot/app_request/admin_item_update`
-- `rust_sqlx/app_request/seed_dummy_data`
-- `rust_sqlx/app_request/admin_item_edit`
-- `rust_sqlx/app_request/admin_item_update`
-- `rust_sqlx_pool1/app_request/*`
-- `rust_sqlx_conn/app_request/*`
-- `rust_sqlx_direct/app_request/*`
-- `rust_sqlx_direct_tuned/app_request/*`
-- `rust_sqlx_manual_tx/app_request/admin_item_update`
+The connection setup raises rusqlite's statement cache from 16 to 256
+(`STATEMENT_CACHE_CAPACITY`). The read request cycles through 22 distinct
+statements, so the default evicts every statement just before its next use and
+runs slower than not caching at all.
 
-SQLite is configured with WAL, `busy_timeout=5000`, and foreign keys enabled.
-The query-only `rusqlite` case uses the same read-heavy request shape after
-enabling `PRAGMA query_only = ON`, and asserts that a write through that
-connection is rejected.
-The baseline SQLx pool uses `max_connections(5)`. The `rusqlite` path uses the
-same request-shaped sequence with normal driver calls, not a hot
-prepared-statement loop.
-
-The Marmot path uses SQL files in `src/app_request/sql/` and generated code in
-`src/generated/sql/`. Regenerate it from the sibling Marmot checkout with:
-
-```sh
-cd /Users/daverapin/projects/rust/marmot
-cargo run -- generate \
-  --database /Users/daverapin/projects/gleam/sqlite_tests/rust/rust_benchmark.sqlite3 \
-  --source-root /Users/daverapin/projects/gleam/sqlite_tests/rust/src \
-  --output /Users/daverapin/projects/gleam/sqlite_tests/rust/src/generated/sql
-```
-
-The SQLx variants are included to isolate overhead. The current fastest SQLx
-shape for the read-heavy request is `rust_sqlx_conn/*`, which avoids checking a
-connection out of the pool for every query. The direct and tuned direct
-connections were not meaningfully faster in the M4 MacBook Air run.
+Earlier versions of this benchmark also measured Marmot-generated Rust and
+SQLx. Marmot generates the same `prepare_cached` calls as this runner and
+measured the same once both had an adequate cache. SQLx mostly measured pool
+and connection settings that would need retuning on every machine.

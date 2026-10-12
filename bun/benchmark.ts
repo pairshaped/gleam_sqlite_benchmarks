@@ -1,13 +1,19 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { rmSync } from "node:fs";
+import {
+  Worker,
+  isMainThread,
+  parentPort,
+  workerData,
+} from "node:worker_threads";
 
 const DEFAULT_ROW_COUNT = 5_000;
 const DB_PATH = "bun_benchmark.sqlite3";
 
-// `prepared` compiles a fresh statement for every query, like `rusqlite`'s
-// `query_row` and `sqlight`. `cached` uses `db.query`, Bun's idiomatic API,
-// which caches compiled statements by SQL text on the connection.
-type QueryMode = "prepared" | "cached";
+// `db.query` caches compiled statements by SQL text, but evicts the oldest
+// once it holds 20. The edit request cycles through 22, which evicts every
+// statement before its next use.
+Database.MAX_QUERY_CACHE_SIZE = 256;
 
 function main() {
   const rows = rowCountFromArgs();
@@ -15,19 +21,13 @@ function main() {
 
   console.log("case,items,micros,us_per_item,check");
 
-  for (const [prefix, mode] of [
-    ["bun_sqlite", "prepared"],
-    ["bun_sqlite_cached", "cached"],
-  ] as const) {
-    removeSqliteFiles(DB_PATH);
-    measure(`${prefix}/app_request/seed_dummy_data`, 1, seedAppRequestData);
-    measure(`${prefix}/app_request/admin_item_edit`, rows, () =>
-      adminItemEditRequests(rows, mode),
-    );
-    measure(`${prefix}/app_request/admin_item_update`, rows, () =>
-      adminItemUpdateRequests(rows, mode),
-    );
-  }
+  measure("bun_sqlite/app_request/seed_dummy_data", 1, seedAppRequestData);
+  measure("bun_sqlite/app_request/admin_item_edit", rows, () =>
+    adminItemEditRequests(rows),
+  );
+  measure("bun_sqlite/app_request/admin_item_update", rows, () =>
+    adminItemUpdateRequests(rows),
+  );
 }
 
 function rowCountFromArgs(): number {
@@ -51,27 +51,18 @@ function removeSqliteFiles(path: string) {
 
 function openConnection(): Database {
   const db = new Database(DB_PATH, { create: true });
+  // Set the busy timeout before anything that takes a lock, so connections
+  // opened at the same moment wait for each other instead of failing.
+  db.run("PRAGMA busy_timeout = 5000");
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA synchronous = NORMAL");
-  db.run("PRAGMA busy_timeout = 5000");
   db.run("PRAGMA foreign_keys = ON");
   return db;
 }
 
-function oneFn(db: Database, mode: QueryMode) {
-  if (mode === "cached") {
-    return (sql: string, ...params: SQLQueryBindings[]): number =>
-      db.query(sql).values(...params)[0][0] as number;
-  }
-
-  return (sql: string, ...params: SQLQueryBindings[]): number => {
-    const statement = db.prepare(sql);
-    try {
-      return statement.values(...params)[0][0] as number;
-    } finally {
-      statement.finalize();
-    }
-  };
+function oneFn(db: Database) {
+  return (sql: string, ...params: SQLQueryBindings[]): number =>
+    db.query(sql).values(...params)[0][0] as number;
 }
 
 function seedAppRequestData(): number {
@@ -166,10 +157,10 @@ function seedAppRequestData(): number {
   return 100;
 }
 
-function adminItemEditRequests(rows: number, mode: QueryMode): number {
+function adminItemEditRequests(rows: number): number {
   const db = openConnection();
   try {
-    const one = oneFn(db, mode);
+    const one = oneFn(db);
     let check = 0;
     for (let i = 1; i <= rows; i++) {
       const eventId = ((i - 1) % 100) + 1;
@@ -271,52 +262,41 @@ function adminItemEditRequest(
   return check;
 }
 
-function adminItemUpdateRequests(rows: number, mode: QueryMode): number {
+// Calling the returned function runs a deferred transaction; `.immediate(...)`
+// runs it with BEGIN IMMEDIATE, which concurrent writers need (see runWorker).
+function updateTransaction(db: Database) {
+  const one = oneFn(db);
+  return db.transaction((sequence: number, eventId: number) => {
+    let check = 0;
+    check += one("select id from app_users where id = ?", 1);
+    check += one("select id from app_clubs where subdomain = ?", "demo");
+    check += one(
+      "select id from app_events where club_id = ? and id = ?",
+      418,
+      eventId,
+    );
+    check += one(
+      "select count(*) from app_addons where addonable_id = ? and addonable_type = ?",
+      eventId,
+      "Event",
+    );
+    check += one(
+      "select count(*) from app_discount_items where item_id = ? and item_type = ?",
+      eventId,
+      "Event",
+    );
+    check += one("select count(*) from app_tags where club_id = ?", 418);
+    db.query(
+      "update app_events set counter = counter + 1, name = ? where id = ?",
+    ).run(`Updated Event ${sequence}`, eventId);
+    return check + eventId;
+  });
+}
+
+function adminItemUpdateRequests(rows: number): number {
   const db = openConnection();
   try {
-    const one = oneFn(db, mode);
-    const run =
-      mode === "cached"
-        ? (sql: string, ...params: SQLQueryBindings[]) => {
-            db.query(sql).run(...params);
-          }
-        : (sql: string, ...params: SQLQueryBindings[]) => {
-            const statement = db.prepare(sql);
-            try {
-              statement.run(...params);
-            } finally {
-              statement.finalize();
-            }
-          };
-
-    const request = db.transaction((sequence: number, eventId: number) => {
-      let check = 0;
-      check += one("select id from app_users where id = ?", 1);
-      check += one("select id from app_clubs where subdomain = ?", "demo");
-      check += one(
-        "select id from app_events where club_id = ? and id = ?",
-        418,
-        eventId,
-      );
-      check += one(
-        "select count(*) from app_addons where addonable_id = ? and addonable_type = ?",
-        eventId,
-        "Event",
-      );
-      check += one(
-        "select count(*) from app_discount_items where item_id = ? and item_type = ?",
-        eventId,
-        "Event",
-      );
-      check += one("select count(*) from app_tags where club_id = ?", 418);
-      run(
-        "update app_events set counter = counter + 1, name = ? where id = ?",
-        `Updated Event ${sequence}`,
-        eventId,
-      );
-      return check + eventId;
-    });
-
+    const request = updateTransaction(db);
     let check = 0;
     for (let i = 1; i <= rows; i++) {
       const eventId = ((i - 1) % 100) + 1;
@@ -328,4 +308,147 @@ function adminItemUpdateRequests(rows: number, mode: QueryMode): number {
   }
 }
 
-main();
+// Concurrent mode: W workers, each a Bun worker thread with its own connection
+// and statement cache, run one workload for a fixed time. Every worker opens its
+// connection before the clock starts, warms up, then records the latency of
+// each request that starts inside the measured window. Writes use BEGIN
+// IMMEDIATE: a deferred transaction that reads and then writes fails at once
+// with SQLITE_BUSY if another worker committed in between, without waiting on
+// busy_timeout.
+
+type Workload = "read" | "write" | "mixed";
+
+type WorkerData = {
+  workload: Workload;
+  index: number;
+  // [warmUntil, measureUntil] as absolute milliseconds, shared with the main
+  // thread; a nonzero measureUntil is the start signal.
+  deadlines: SharedArrayBuffer;
+};
+
+// Absolute time in milliseconds, comparable across worker threads.
+function now(): number {
+  return performance.timeOrigin + performance.now();
+}
+
+function runWorker({ workload, index, deadlines }: WorkerData) {
+  const db = openConnection();
+  const one = oneFn(db);
+  const update = updateTransaction(db);
+  const shared = new Float64Array(deadlines);
+  parentPort!.postMessage("ready");
+  while (shared[1] === 0) {}
+  const [warmUntil, measureUntil] = shared;
+
+  const latencies: number[] = [];
+  // Offset each worker's event ids so workers don't all hit the same rows.
+  let sequence = index * 37;
+  for (;;) {
+    const start = now();
+    if (start >= measureUntil) break;
+    sequence++;
+    const eventId = ((sequence - 1) % 100) + 1;
+    const write =
+      workload === "write" || (workload === "mixed" && sequence % 10 === 0);
+    if (write) {
+      update.immediate(sequence, eventId);
+    } else {
+      adminItemEditRequest(one, eventId);
+    }
+    if (start >= warmUntil) latencies.push(Math.round((now() - start) * 1000));
+  }
+  db.close();
+  const result = Float64Array.from(latencies);
+  parentPort!.postMessage(result, [result.buffer]);
+}
+
+async function runConcurrent(
+  workload: Workload,
+  count: number,
+  duration: number,
+  warmup: number,
+) {
+  const deadlines = new SharedArrayBuffer(16);
+  const shared = new Float64Array(deadlines);
+  const workers = Array.from(
+    { length: count },
+    (_, index) =>
+      new Worker(import.meta.path, {
+        workerData: { workload, index, deadlines } satisfies WorkerData,
+      }),
+  );
+  const messages = workers.map((worker) => {
+    const queue: unknown[] = [];
+    const waiting: ((value: unknown) => void)[] = [];
+    worker.on("message", (message) => {
+      const resolve = waiting.shift();
+      if (resolve) resolve(message);
+      else queue.push(message);
+    });
+    worker.on("error", (error) => {
+      console.error(error);
+      process.exit(1);
+    });
+    return () =>
+      queue.length > 0
+        ? Promise.resolve(queue.shift())
+        : new Promise((resolve) => waiting.push(resolve));
+  });
+
+  await Promise.all(messages.map((next) => next()));
+  const warmUntil = now() + warmup * 1000;
+  shared[0] = warmUntil;
+  shared[1] = warmUntil + duration * 1000;
+
+  const results = (await Promise.all(
+    messages.map((next) => next()),
+  )) as Float64Array[];
+  await Promise.all(workers.map((worker) => worker.terminate()));
+
+  const all = new Float64Array(results.reduce((sum, r) => sum + r.length, 0));
+  let offset = 0;
+  for (const result of results) {
+    all.set(result, offset);
+    offset += result.length;
+  }
+  all.sort();
+  const percentile = (p: number) =>
+    all.length === 0 ? 0 : all[Math.floor((all.length - 1) * p)];
+  const max = all.length === 0 ? 0 : all[all.length - 1];
+  // Any failed query stops this runner, so a printed row always has 0 errors.
+  console.log(
+    `bun_sqlite/concurrent/${workload},${count},${duration},${all.length},${Math.round(all.length / duration)},${percentile(0.5)},${percentile(0.95)},${percentile(0.99)},${max},0`,
+  );
+}
+
+// Usage: bun run benchmark.ts concurrent <duration seconds> <warmup seconds> <workers,...>
+async function concurrentMain() {
+  const [, , , durationArg, warmupArg, workersArg] = process.argv;
+  if (!workersArg) {
+    console.error(
+      "usage: bun run benchmark.ts concurrent <duration> <warmup> <workers,...>",
+    );
+    process.exit(2);
+  }
+  const duration = Number(durationArg);
+  const warmup = Number(warmupArg);
+
+  removeSqliteFiles(DB_PATH);
+  seedAppRequestData();
+  console.log(
+    "case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors",
+  );
+  for (const workload of ["read", "write", "mixed"] as const) {
+    for (const token of workersArg.split(",")) {
+      await runConcurrent(workload, Number(token), duration, warmup);
+    }
+  }
+}
+
+if (!isMainThread) {
+  runWorker(workerData as WorkerData);
+} else if (process.argv[2] === "concurrent") {
+  await concurrentMain();
+} else {
+  main();
+}

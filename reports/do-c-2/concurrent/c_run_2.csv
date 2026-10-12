@@ -1,0 +1,10 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+c_sqlite/concurrent/read,1,5,42525,8505,111,162,171,302,0
+c_sqlite/concurrent/read,2,5,56848,11370,174,219,242,623,0
+c_sqlite/concurrent/read,4,5,89040,17808,109,137,4134,8195,0
+c_sqlite/concurrent/write,1,5,123000,24600,17,26,34,241563,0
+c_sqlite/concurrent/write,2,5,181551,36310,21,37,68,172048,0
+c_sqlite/concurrent/write,4,5,180806,36161,21,36,61,2344692,0
+c_sqlite/concurrent/mixed,1,5,58258,11652,86,126,142,62597,0
+c_sqlite/concurrent/mixed,2,5,42942,8588,137,265,3735,99590,0
+c_sqlite/concurrent/mixed,4,5,78440,15688,86,900,3017,56212,0

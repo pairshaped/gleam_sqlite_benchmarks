@@ -1,33 +1,32 @@
 # SQLite Request-Shape Benchmarks
 
-This repo compares one synthetic but app-shaped SQLite workload across four
-language buckets:
+This repo runs one synthetic, app-shaped SQLite workload in six languages and
+compares how much each adds on top of SQLite itself, one request at a time and
+with many workers at once:
 
-- [gleam/](gleam/): Gleam on BEAM with `sqlight`, Gleam Marmot-generated
-  `sqlight`, plus local Postgres through `pog`.
-- [rust/](rust/): Rust with hand-written `rusqlite`, Marmot-generated
-  `rusqlite`, and `sqlx` against SQLite.
-- [bun/](bun/): Bun with its built-in `bun:sqlite` driver.
-- [ruby/](ruby/): Ruby with ActiveRecord and SQLite.
+- [c/](c/README.md): the SQLite C API with no wrapper. This is the baseline.
+- [rust/](rust/README.md): Rust with `rusqlite`.
+- [zig/](zig/README.md): Zig calling the SQLite C API directly.
+- [go/](go/README.md): Go with `database/sql` and `mattn/go-sqlite3`.
+- [bun/](bun/README.md): Bun with its built-in `bun:sqlite`.
+- [gleam/](gleam/README.md): Gleam on the BEAM with `esqlite`.
 
-The benchmark intentionally avoids real application data. The schema, rows, and
-names are synthetic. The request shapes are based on production-style app
-requests: many small indexed reads, a recursive parent lookup, and a short save
-transaction.
+The schema, rows and names are synthetic. The request shapes come from a
+production admin app: many small indexed reads, a recursive parent lookup and a
+short save transaction.
 
-See [REPORT.md](REPORT.md) for findings, hardware notes, and representative
-numbers.
+Results live in [REPORT.md](REPORT.md), with one report per machine under
+[reports/](reports/). Every published number comes from a dedicated cloud VM.
+Laptop runs are fine for checking that the runners build and agree, but
+background apps make their timings unreliable, so they aren't reported.
 
-## Docs
+## What runs
 
-- [Report](REPORT.md): TLDR, result tables, caveats, and reproduction commands.
-- [Gleam runner](gleam/README.md): `sqlight` and `pog` commands and defaults.
-- [Rust runner](rust/README.md): hand-written `rusqlite`, Marmot-generated
-  `rusqlite`, and SQLx commands.
-- [Bun runner](bun/README.md): `bun:sqlite` command and statement-cache notes.
-- [Ruby runner](ruby/README.md): ActiveRecord command and ORM notes.
+There are two modes. Sequential mode runs requests one at a time on one
+connection and measures what a language adds per request. Concurrent mode runs
+several workers at once and measures how each language scales across cores.
 
-## What Runs
+### Sequential mode
 
 Each runner prints CSV:
 
@@ -35,212 +34,287 @@ Each runner prints CSV:
 case,items,micros,us_per_item,check
 ```
 
-The main cases are:
+Every runner measures three cases, prefixed with its own name (for example
+`c_sqlite/app_request/admin_item_edit`):
 
-- `app_request/seed_dummy_data`: creates a small dummy schema and seed rows.
-- `app_request/admin_item_edit`: a read-heavy request with point selects,
-  filtered counts, small joins, and a recursive parent lookup.
-- `app_request/admin_item_update`: a short transaction with a few reads and one
-  row update.
+- `app_request/seed_dummy_data`: creates the dummy schema and seed rows.
+- `app_request/admin_item_edit`: a read-heavy request with 26 queries over 22
+  distinct statements: point selects, filtered counts, small joins and a
+  recursive parent lookup.
+- `app_request/admin_item_update`: one transaction with six reads and one row
+  update.
 
-The Gleam SQLite runner prints raw FFI-backed `app_request/*` rows,
-`gleam_marmot/app_request/*` rows generated from the shared SQL files, then
-`probed_*` rows with scheduler, `file:sendfile/2`, and `file:read_file/1`
-probes enabled.
+The `check` column is a checksum of every value the requests read. All runners
+must print the same checks, which is how you know they did the same work.
 
-## Run Gleam SQLite
+The Rust runner adds a `rust_rusqlite_query_only` read case on a connection
+with `PRAGMA query_only = ON`.
 
-```sh
-cd gleam
-gleam deps download
-gleam run 5000
-```
+### Concurrent mode
 
-## Run Gleam Postgres
+W workers run at once, each with its own connection and statement cache, for a
+fixed time. Each language uses its usual concurrency model: OS threads in C,
+Zig and Rust, goroutines in Go, worker threads in Bun and processes in Gleam.
+Every worker opens its connection before the clock starts, runs a warm-up, then
+records the latency of each request that starts inside the measured window.
 
-The Postgres runner uses `pog` and defaults to a local Unix socket. It prints two
-request shapes:
+There are three workloads: `read` runs the edit request, `write` runs the update
+transaction, and `mixed` makes every tenth request a write. Each runs at 1, 2,
+4 and so on up to the CPU count, then at twice the CPU count to show what
+oversubscription does.
 
-- `app_request/*`: the production-derived request shape used by the SQLite
-  cases. It is a real-world OLTP shape: many small indexed reads and a short
-  save transaction.
-- `batched_request/*`: the same logical work with fewer, larger SQL statements.
-  This tests the effect of reducing protocol round-trips.
+Each runner prints:
 
 ```text
-PGHOST=/tmp
-PGPORT=5432
-PGUSER=$USER
-PGDATABASE=postgres
-PGPASSWORD=
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us
 ```
 
-Run it with:
+Concurrent writes start with `BEGIN IMMEDIATE`. A plain `BEGIN` transaction
+that reads and then writes fails at once with `SQLITE_BUSY` if another
+connection committed in between, without waiting on the busy timeout, so the
+write numbers would measure errors. Every connection also sets its busy timeout
+before any other pragma, so connections opened at the same moment wait for
+each other instead of failing.
+
+Read the write rows with two SQLite behaviours in mind:
+
+- SQLite allows one writer at a time, so write throughput flattens no matter
+  how many workers you add.
+- The busy timeout is unfair. A writer that finds the database locked sleeps
+  and retries, while whichever connection holds the lock keeps winning, so one
+  write can wait hundreds of milliseconds while the others take microseconds.
+  That hides above the 99th percentile, which is why the output includes the
+  maximum. Part of the maximum is also SQLite's automatic WAL checkpoint, which
+  flushes to disk every 1,000 pages and can take tens of milliseconds on a VM
+  even with a single writer. An app that sends all writes through one writer,
+  queuing them itself, avoids the starvation.
+
+The checksum doesn't apply here, because readers see counters that writers keep
+changing. Instead, any failed query stops the run.
+
+## A fair comparison
+
+Two things would quietly skew the numbers, so the runners control both.
+
+### Statement caching
+
+Every runner reuses every compiled statement it runs, including `BEGIN` and
+`COMMIT`, and the caches are big enough that nothing is evicted.
+
+That matters more than it sounds. The read request cycles through 22 distinct
+statements. A cache smaller than that evicts each statement just before its
+next use, so every lookup misses and the request ends up slower than it would
+with no cache at all. rusqlite's default cache holds 16 statements and Bun's
+holds 20, so both thrash on this request out of the box.
+
+- C and Zig prepare each statement once per connection and keep it.
+- Rust uses `prepare_cached` with the cache raised to 256 statements.
+- Go caches one prepared `*sql.Stmt` per SQL string on a dedicated connection.
+- Bun uses `db.query` with `Database.MAX_QUERY_CACHE_SIZE` raised to 256.
+- Gleam keeps one compiled `esqlite` statement per connection and SQL string in
+  the process dictionary. See the Gleam caveats below.
+
+### One SQLite
+
+C, Zig, Go and Rust link the same SQLite 3.51.0 library, built from SQLite's
+release tarball by the flake. Bun 1.4.3 embeds its own copy of the same
+release. Gleam uses the SQLite that `esqlite` bundles, 3.50.4.
+
+## Gleam caveats
+
+The Gleam rows need more context than the others before you apply them to a
+production app.
+
+### The statement cache is per process
+
+The Gleam cache lives in one BEAM process. This benchmark runs every request in
+that one process, so the cache stays warm for the whole run. A Gleam web server
+such as Mist or Wisp handles each request or connection in its own process, so a
+per-process cache starts cold on every request and only helps statements that
+repeat within that request.
+
+Treat the Gleam rows as a best case: one process, warm cache. To keep compiled
+statements across requests, a real app has to keep them with the connection,
+for example in a long-lived process that owns it.
+
+### Dirty I/O schedulers: why Gleam has two rows
+
+`esqlite` runs every SQLite call on the BEAM's dirty I/O schedulers, so each
+query moves the calling process to a dirty I/O thread and back. The BEAM starts
+10 dirty I/O threads regardless of how many CPUs the machine has. On a small VM
+those extra threads fight over the cores, waking them is slow, and runs flip
+between fast and slow with no other change. On a 2-vCPU Droplet, cached Gleam
+read requests took anywhere from 423 to 1,286 µs with the default settings.
+
+So the Gleam runner runs twice:
+
+- `gleam_sqlite` uses the BEAM defaults. This is what an app gets unless
+  someone tunes it, and it's the row to compare against the other languages.
+- `gleam_sqlite_sdio` sets `+SDio` to the machine's CPU count, which held the
+  same Droplet at 423 to 435 µs. On a machine with 10 or more CPUs the two rows
+  should match, because the default already fits.
+
+The tuned row is a real production option, with one condition. `+SDio` matching
+the CPU count is a one-line setting in `vm.args` or `ERL_FLAGS`, but SQLite's
+busy timeout sleeps on the dirty I/O thread running the query. If as many
+connections are waiting on a lock as there are dirty I/O threads, every thread
+is asleep and the connection holding the lock can't run its `COMMIT`, so
+everything stalls until the timeouts expire and those queries fail. Concurrent
+mode reproduces this: 4 writers stall with `+SDio 2`, and 12 writers stall on
+the default 10 threads. Gleam's concurrent rows report those failures in the
+`errors` column instead of stopping the run.
+
+So the cap is safe when writes go through one connection, such as a single
+writer process that queues them; readers in WAL mode don't wait on writers.
+With many writer connections, keep them below the dirty I/O thread count and
+don't lower `+SDio`. Don't go below the CPU count either way: `+SDio 1` measures
+the same in sequential mode, but it pushes every SQLite call and file operation
+on the node through one thread.
+
+## Bun caveat: SQLite blocks the JavaScript thread
+
+`bun:sqlite` is synchronous. A query runs to completion on the JavaScript thread
+that called it, and nothing else on that thread runs in the meantime: no other
+request, timer or I/O callback. For the queries in this benchmark that costs a
+few microseconds each and doesn't matter.
+
+Lock waits are the problem. When a write finds the database locked, SQLite's
+busy timeout sleeps inside the call, on that same thread. In concurrent mode a
+single write waited one to two seconds under contention, in every language. In
+Bun that sleep freezes every other request handled by the same thread for as
+long as it lasts. The concurrent runner hides this because each worker thread
+runs only its own requests; a web server would not.
+
+A Bun app on SQLite has to be designed around it from the start:
+
+- Give writes one owner. Run a single writer, in its own worker thread or
+  process, that holds the only connection that writes and takes requests
+  through a queue. Only that connection ever waits on the write lock, and the
+  wait never blocks a thread that serves other requests.
+- Spread reads across processes or worker threads, each with its own read
+  connection. In WAL mode readers don't wait on the writer, but a single
+  JavaScript thread still serializes every query it runs, so one thread caps
+  read throughput at about one core.
+- Keep queries short. Any slow query, such as an unindexed scan or a large
+  report, blocks its thread for its whole duration.
+
+This is the same single-writer pattern that avoids SQLite's write starvation in
+any language. In Bun it is required, not just recommended.
+
+## Toolchains
+
+`flake.nix` pins every toolchain: SQLite 3.51.0, Clang or GCC from nixpkgs,
+Rust 1.99.0, Zig 0.16.0, Go 1.26, Bun 1.4.3, Gleam 1.19.2 with Erlang/OTP 28 and
+rebar3, and Ruby for the summary script. Gleam and Bun come from the projects'
+own release binaries and SQLite from its release tarball, all checked by hash,
+so a new release doesn't wait on nixpkgs. The flake supports `x86_64-linux`,
+`aarch64-linux` and `aarch64-darwin`.
+
+Enter the shell from the repo root and run any command below inside it:
 
 ```sh
-cd gleam
-gleam run -m postgres_tests 5000
+nix develop
 ```
 
-Override the `PG*` variables if your local Postgres uses different settings.
+Or run one command directly, such as `nix develop -c scripts/run_all.sh 10000`.
 
-The runner does not tune PostgreSQL server config. If you want a serious
-Postgres run, use a dedicated local instance and set memory/cache settings for
-that machine and dataset. For this small cached dataset, protocol round-trips
-matter more than settings such as `shared_buffers`, `work_mem`, or
-`effective_cache_size`.
-
-## Run Rust
+## Run everything
 
 ```sh
-cd rust
-cargo run --release --quiet -- 5000
+RUNS=5 scripts/run_all.sh 10000
+MODE=concurrent RUNS=3 scripts/run_all.sh
 ```
 
-Use release mode. Debug-mode Rust numbers are not useful for this comparison.
-The Rust runner prints both `rust_rusqlite/*` and `rust_sqlx/*` rows. The
-`rust_marmot/*` rows use generated `rusqlite` functions from colocated SQL
-files. The `rusqlite` rows use the same request shape with normal driver calls,
-not a hot prepared-statement loop.
+Each builds every runner, runs every suite `RUNS` times, and writes raw CSV
+files, machine metadata and a median summary under `benchmark-results/`. Set
+`SUITES` to run a subset, for example `SUITES="c rust"`. The suites are `c`,
+`rust`, `zig`, `go`, `bun`, `gleam_sqlite` and `gleam_sqlite_sdio`.
 
-## Run Bun
+Concurrent mode takes `DURATION` (seconds measured per point, default 5),
+`WARMUP` (default 1) and `WORKERS` (a comma-separated list, defaulting to powers
+of two up to the CPU count plus twice the CPU count).
 
-```sh
-cd bun
-bun run benchmark.ts 5000
-```
+Keep the request count around 10,000. At 1,000 the CPU hasn't reached full
+speed yet, and single runs swing widely. To save time, lower `RUNS`
+before lowering the request count. For a quick check that everything builds and
+the checks agree, `RUNS=1 scripts/run_all.sh 1000` is enough.
 
-The Bun runner prints `bun_sqlite/*` rows, which prepare and finalize a
-statement for every query like the `rusqlite` rows, and `bun_sqlite_cached/*`
-rows, which use Bun's idiomatic `db.query` statement cache. It has no runtime
-dependencies; `bun install` only fetches type declarations for `bun run
-typecheck`.
+To run one language on its own, follow its README.
 
-## Run Ruby ActiveRecord
+## Run on a throwaway Linux box
 
-Ruby is managed with asdf in this repo:
+Nothing in the suite touches the network or real data, so any Linux host with
+Nix can run it. A rented VPS you destroy afterwards works well; destroy it
+rather than powering it off, since a stopped VPS usually still bills.
 
-```sh
-cd ruby
-asdf exec bundle install
-asdf exec bundle exec ruby benchmark.rb 5000
-```
+Choose the box deliberately:
 
-ActiveRecord logging and verbose query logs are disabled. The benchmark uses
-ActiveRecord models and relations for the measured request work. Raw SQL is used
-only for schema and seed setup.
+- Building needs about 2 GB of RAM, mostly for the Rust release build. On 1 GB,
+  add swap and set `CARGO_BUILD_JOBS=1`.
+- Plans with dedicated vCPUs give steadier numbers. Shared vCPUs work but are
+  noisier, so raise `RUNS` and compare medians.
+- Avoid burstable plans that throttle once CPU credits run out mid-run.
+- On x86, check for AVX2 (`grep -c avx2 /proc/cpuinfo`). Bun's standard x64
+  build needs it.
+- Turn off background services and timers first (shown below). Automatic
+  updates or an agent check firing mid-run would show up as a slow run.
 
-## Run In Docker
-
-The Docker image is meant for a quiet Linux box. It installs the language
-toolchains, clones the Marmot generators, regenerates the benchmark bindings,
-builds the runners, starts local Postgres, and runs each suite sequentially.
-
-```sh
-DOCKER_BUILDKIT=1 docker build --ssh default \
-  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
-  -f docker/bench.Dockerfile \
-  -t sqlite-tests-bench .
-
-docker run --rm \
-  -v "$PWD/benchmark-results:/app/benchmark-results" \
-  -e RUNS=5 \
-  sqlite-tests-bench 5000
-```
-
-The build clones the Marmot generators from GitHub:
-
-- `git@github.com:pairshaped/marmot.git`
-- `git@github.com:pairshaped/marmot-rust.git`
-
-This benchmark repo still uses the legacy Marmot Rust `src/*/sql/*.sql` layout,
-so pin `RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5`
-until those SQL files are ported to companion `-- func:` blocks.
-
-If you want to use HTTPS instead, override the repo args:
-
-```sh
-DOCKER_BUILDKIT=1 docker build \
-  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
-  --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
-  --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
-  --build-arg RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5 \
-  -f docker/bench.Dockerfile \
-  -t sqlite-tests-bench .
-```
-
-Use `GLEAM_MARMOT_REF` and `RUST_MARMOT_REF` build args to test branches or
-tags. Results are written under `benchmark-results/`, including raw CSV files,
-machine metadata, and a median summary.
-
-For a dedicated production-hardware benchmark box, run the benchmark through
-Docker. This repo is not deployed like an application. The host does not need
-Rust, Gleam, Bun, or Ruby installed directly; the benchmark image installs those
-toolchains.
-
-Keep the concrete benchmark host, SSH user, and any existing server checkout
-paths in private ops notes or your shell config, not in this public repo. If the
-server has an older copied tree from previous runs, treat it as historical
-output unless it is also a git checkout.
+Keep concrete hostnames, SSH users and server paths in private notes, not in
+this public repo.
 
 ```sh
 ssh <benchmark-user>@<benchmark-host>
-sudo apt update
-sudo apt install -y docker.io git openssh-client
-# If your user cannot access Docker yet, either prefix docker commands with
-# sudo or run: sudo usermod -aG docker "$USER" && newgrp docker
+# DigitalOcean's Debian 13 image ships without git.
+apt-get update && apt-get install -y git
+
+# Stop background services and timers that would compete for CPU mid-run, and
+# keep them off across reboots and resizes. Leaves SSH, networking and journald.
+systemctl disable --now unattended-upgrades.service droplet-agent.service \
+  apt-daily.timer apt-daily-upgrade.timer man-db.timer dpkg-db-backup.timer \
+  e2scrub_all.timer fstrim.timer droplet-agent-update.timer
+systemctl mask --now systemd-tmpfiles-clean.timer
+curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
+. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 
 git clone https://github.com/pairshaped/gleam_sqlite_benchmarks.git
 cd gleam_sqlite_benchmarks
 
-DOCKER_BUILDKIT=1 docker build \
-  --build-arg BENCHMARK_GIT_REV="$(git rev-parse --short HEAD)" \
-  --build-arg GLEAM_MARMOT_REPO=https://github.com/pairshaped/marmot.git \
-  --build-arg RUST_MARMOT_REPO=https://github.com/pairshaped/marmot-rust.git \
-  --build-arg RUST_MARMOT_REF=4bff3531b83616465a7741311577b07ac954aee5 \
-  -f docker/bench.Dockerfile \
-  -t sqlite-tests-bench .
-
-docker run --rm \
-  -v "$PWD/benchmark-results:/app/benchmark-results" \
-  -e RUNS=5 \
-  sqlite-tests-bench 10000
+# Detach the run so a dropped SSH connection doesn't kill it.
+nohup bash -c 'RUNS=5 OUT_DIR=benchmark-results/<box-name> nix develop -c scripts/run_all.sh 10000; echo $? > run.done' > run.log 2>&1 < /dev/null &
+tail -f run.log
 ```
 
-Use a distinct tag when testing a branch so the old image remains available:
+Copy `benchmark-results/` back with `scp -r` before destroying the box.
 
-```sh
-docker build ... -t sqlite-tests-bench:query-only .
-docker run --rm -v "$PWD/benchmark-results:/app/benchmark-results" -e RUNS=5 sqlite-tests-bench:query-only 10000
-```
+To benchmark uncommitted local changes instead of cloning, copy the tree with
+`rsync` (install it with `apt-get install -y rsync`). Skip build output
+(`gleam/build`, `rust/target`, `bun/node_modules`, `c/benchmark`,
+`zig/benchmark`, `go/benchmark`, `benchmark-results`, `*.sqlite3*`) and keep
+`.git`, because the flake reads files through Git. Then `chown -R` the tree to
+the user running Nix: `rsync -a` keeps your local owner, and Nix refuses a Git
+repository owned by another user. New files must be tracked or added with
+`git add -N`, or Nix won't see them.
 
-The dedicated server used for the Linux run:
+## Change the shape
 
-- OS: Debian GNU/Linux 13 (trixie)
-- CPU: AMD Ryzen 7 9700X, 8 cores / 16 threads
-- Memory: 62 GiB
-- Architecture: x86_64
+Each runner holds its own copy of the seed SQL and request sequence:
 
-## Change the Shape
+- C: `c/benchmark.c`
+- Rust: `rust/src/main.rs`
+- Zig: `zig/benchmark.zig`
+- Go: `go/main.go`
+- Bun: `bun/benchmark.ts`
+- Gleam: `gleam/src/sqlite_tests_ffi.erl`, driven by `gleam/src/sqlite_tests.gleam`
 
-The useful knobs are in the seed and request functions:
-
-- Gleam SQLite raw FFI path: `gleam/src/sqlite_tests_ffi.erl`
-- Shared Marmot SQL files: `rust/src/app_request/sql`
-- Gleam Marmot runner: `gleam/src/sqlite_tests.gleam`
-- Gleam Postgres: `gleam/src/postgres_tests_ffi.erl`
-- Rust SQLx: `rust/src/main.rs`
-- Ruby ActiveRecord: `ruby/benchmark.rb`
-
-To test a different workload, keep the CSV shape and checksums, then change:
+To test a different workload, change all six the same way and keep the CSV
+shape. If the checks stop matching across runners, the runners no longer do the
+same work. Useful knobs:
 
 - number of tables and indexes created by the seed step
 - rows inserted per table
 - number of queries in `admin_item_edit`
 - number of queries and writes in `admin_item_update`
-- whether the parent lookup is SQL-recursive or application-recursive
-- connection pool sizes
-- Postgres request shape: chatty request sequence vs fewer larger statements
+- whether the parent lookup is SQL-recursive or done in application code
 
-The row count argument controls how many simulated requests run. It does not
-change seed-table sizes unless you edit the seed functions.
+The request-count argument controls how many simulated requests run. It doesn't
+change seed sizes unless you edit the seed step.
