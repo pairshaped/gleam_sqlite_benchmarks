@@ -147,10 +147,9 @@ The full summary, including p99 latency tables, is in
   constant as workers are added instead of widening.
 - Two workers use only about two thirds of the two vCPUs on reads, in every
   native runner and Bun, while four workers keep both busy at single-thread
-  speed. A likely cause is that each of the request's 26 queries runs in its
-  own automatic read transaction, and each one takes a lock on SQLite's shared
-  WAL index, so two workers spend time waiting on each other. That's untested;
-  wrapping a request's reads in one transaction would test it.
+  speed. The same Droplet resized to 4 vCPUs scaled cleanly at 2 workers, so
+  the cause is probably how this VM's two vCPUs map to physical cores, such as
+  two hyperthreads of one core, rather than SQLite.
 - Mixed throughput drops from 1 worker to 2 in every native runner and Bun. A
   writer that finds the lock taken sleeps in SQLite's busy timeout, leaving its
   CPU idle; with 4 workers, another worker uses that CPU.
