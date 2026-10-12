@@ -12,6 +12,9 @@
 
 ## Toolchains
 
+Zig was built with `-O ReleaseFast` for this report, which removes its runtime
+safety checks. Later reports use `ReleaseSafe`, which keeps them.
+
 All from `flake.nix`: SQLite 3.51.0 (C, Zig, Rust), Rust 1.99.0 with
 rusqlite 0.40.2, Zig 0.16.0, Go 1.26.8 with ncruces/go-sqlite3 0.35.6 (its own
 SQLite 3.53.4), Bun 1.4.3 (its embedded SQLite is also 3.51.0), Gleam 1.19.2 on

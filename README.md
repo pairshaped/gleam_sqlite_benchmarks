@@ -6,7 +6,8 @@ with many workers at once:
 
 - [c/](c/README.md): the SQLite C API with no wrapper. This is the baseline.
 - [rust/](rust/README.md): Rust with `rusqlite`.
-- [zig/](zig/README.md): Zig calling the SQLite C API directly.
+- [zig/](zig/README.md): Zig calling the SQLite C API directly, built with
+  runtime safety checks on (`ReleaseSafe`).
 - [go/](go/README.md): Go with `ncruces/go-sqlite3`, the fastest Go SQLite
   library here.
 - [bun/](bun/README.md): Bun with its built-in `bun:sqlite`.
