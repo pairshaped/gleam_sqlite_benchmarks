@@ -23,12 +23,9 @@ Microseconds per request, lower is better:
 | Zig | 116 | 1.0x | 38 | 1.0x |
 | Rust (`rusqlite`) | 123 | 1.1x | 43 | 1.1x |
 | Bun | 145 | 1.3x | 51 | 1.3x |
-| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.3x |
+| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.2x |
 | Gleam, default BEAM | 1,147 | 10.0x | 115 | 2.9x |
 | Gleam, `+SDio 2` | 432 | 3.8x | 125 | 3.1x |
-
-Go's row comes from a later rerun that repeated C as a reference (114 µs and
-36 µs), so its ratios are against that run's C.
 
 - Zig and Rust add almost nothing on top of SQLite's C API.
 - Bun adds about 30%.
@@ -48,7 +45,7 @@ At 4 workers on 2 vCPUs, as a share of C's throughput:
 | Rust | 91% | 90% | 93% |
 | Zig | 99% | 99% | 102% |
 | Bun | 77% | 75% | 73% |
-| Go | 34% | 55% | 36% |
+| Go | 34% | 55% | 35% |
 
 - Rust and Bun scale like C, each keeping a steady gap instead of falling
   further behind under load.

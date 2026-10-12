@@ -17,12 +17,6 @@ rusqlite 0.40.2, Zig 0.16.0, Go 1.26.8 with ncruces/go-sqlite3 0.35.6 (its own
 SQLite 3.53.4), Bun 1.4.3 (its embedded SQLite is also 3.51.0), Gleam 1.19.2 on
 Erlang/OTP 28 with esqlite 0.9.0 (its bundled SQLite is 3.50.4).
 
-The Go rows come from a later rerun on the same Droplet, after the Go runner
-switched from `database/sql` with `mattn/go-sqlite3` to `ncruces/go-sqlite3`.
-That rerun repeated C as a reference: 114 µs per read request, the same as the
-main run, and 36 µs per update against 40. Go's ratios below are against the
-rerun's C. [go/README.md](../../go/README.md) compares the Go libraries.
-
 ## Sequential mode
 
 10,000 requests per case, 5 runs, medians. Microseconds per request; lower is
@@ -34,7 +28,7 @@ better.
 | Zig | 116 | 1.0x | 38 | 1.0x |
 | Rust (`rusqlite`) | 123 | 1.1x | 43 | 1.1x |
 | Bun | 145 | 1.3x | 51 | 1.3x |
-| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.3x |
+| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.2x |
 | Gleam, default BEAM | 1,147 | 10.0x | 115 | 2.9x |
 | Gleam, `+SDio 2` | 432 | 3.8x | 125 | 3.1x |
 
@@ -49,7 +43,7 @@ What the numbers say:
   spread on the update and about 8% on the read request.
 - Bun adds about 30%, the cost of crossing from JavaScript into native code and
   building JavaScript values for each row.
-- Go adds about 70% to the read request and 30% to the update. Its SQLite is
+- Go adds about 70% to the read request and 20% to the update. Its SQLite is
   compiled to Wasm and translated to Go, which runs slower than native code,
   but it avoids cgo, whose fixed cost per call made the other Go libraries
   slower still.
@@ -175,10 +169,9 @@ The full summary, including p99 latency tables, is in
   sequential mode. The run also produced Gleam probe rows, since removed from
   the runner; they were stripped from these CSVs.
 - [concurrent/](concurrent/): the same for concurrent mode.
-- [go-rerun/](go-rerun/): the Go rerun in both modes, with C as a reference,
-  plus the two Go variants that were later removed (`go` is `database/sql` with
-  `mattn/go-sqlite3`, `go_cgo` the C API called through cgo). The Go rows in
-  the main runs' raw data are `mattn/go-sqlite3`.
+- [go-rerun/](go-rerun/): the Go rows above, from a rerun after the Go runner
+  switched libraries, with C repeated for reference and the two Go variants
+  compared in [go/README.md](../../go/README.md).
 
 The concurrent run used the code in the commit that adds this report. The
 sequential run used an earlier working tree with the same sequential request
