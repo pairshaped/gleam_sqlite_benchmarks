@@ -7,7 +7,8 @@ with many workers at once:
 - [c/](c/README.md): the SQLite C API with no wrapper. This is the baseline.
 - [rust/](rust/README.md): Rust with `rusqlite`.
 - [zig/](zig/README.md): Zig calling the SQLite C API directly.
-- [go/](go/README.md): Go with `database/sql` and `mattn/go-sqlite3`.
+- [go/](go/README.md): Go with `ncruces/go-sqlite3`, the fastest Go SQLite
+  library here.
 - [bun/](bun/README.md): Bun with its built-in `bun:sqlite`.
 - [gleam/](gleam/README.md): Gleam on the BEAM with `esqlite`.
 
@@ -109,16 +110,17 @@ holds 20, so both thrash on this request out of the box.
 
 - C and Zig prepare each statement once per connection and keep it.
 - Rust uses `prepare_cached` with the cache raised to 256 statements.
-- Go caches one prepared `*sql.Stmt` per SQL string on a dedicated connection.
+- Go caches one prepared statement per SQL string on its connection.
 - Bun uses `db.query` with `Database.MAX_QUERY_CACHE_SIZE` raised to 256.
 - Gleam keeps one compiled `esqlite` statement per connection and SQL string in
   the process dictionary. See the Gleam caveats below.
 
 ### One SQLite
 
-C, Zig, Go and Rust link the same SQLite 3.51.0 library, built from SQLite's
-release tarball by the flake. Bun 1.4.3 embeds its own copy of the same
-release. Gleam uses the SQLite that `esqlite` bundles, 3.50.4.
+C, Zig and Rust link the same SQLite 3.51.0 library, built from SQLite's release
+tarball by the flake. Bun 1.4.3 embeds its own copy of the same release. Go's
+`ncruces/go-sqlite3` runs its own SQLite 3.53.4, compiled to Wasm and translated
+to Go, and Gleam uses the SQLite 3.50.4 that `esqlite` bundles.
 
 ## Gleam caveats
 

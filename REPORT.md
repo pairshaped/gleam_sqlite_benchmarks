@@ -23,13 +23,17 @@ Microseconds per request, lower is better:
 | Zig | 116 | 1.0x | 38 | 1.0x |
 | Rust (`rusqlite`) | 123 | 1.1x | 43 | 1.1x |
 | Bun | 145 | 1.3x | 51 | 1.3x |
-| Go (`database/sql`) | 225 | 2.0x | 64 | 1.6x |
+| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.3x |
 | Gleam, default BEAM | 1,147 | 10.0x | 115 | 2.9x |
 | Gleam, `+SDio 2` | 432 | 3.8x | 125 | 3.1x |
 
+Go's row comes from a later rerun that repeated C as a reference (114 µs and
+36 µs), so its ratios are against that run's C.
+
 - Zig and Rust add almost nothing on top of SQLite's C API.
 - Bun adds about 30%.
-- Go roughly doubles the read request, from `database/sql` and cgo.
+- Go adds about 70% with the fastest Go library, which avoids cgo by running
+  SQLite translated to Go.
 - Gleam pays for `esqlite` running every SQLite call on a dirty I/O scheduler
   thread. On a small VM those handoffs dominate, and runs swing between fast
   and slow. Capping dirty I/O threads at the vCPU count makes the fast mode
@@ -44,12 +48,12 @@ At 4 workers on 2 vCPUs, as a share of C's throughput:
 | Rust | 91% | 90% | 93% |
 | Zig | 99% | 99% | 102% |
 | Bun | 77% | 75% | 73% |
-| Go | 35% | 36% | 34% |
+| Go | 34% | 55% | 36% |
 
 - Rust and Bun scale like C, each keeping a steady gap instead of falling
   further behind under load.
-- Go scales poorly: its read throughput barely grows with workers, and its
-  write throughput shrinks.
+- Go's reads stop scaling at about 6,000 requests per second. Its writes hold at
+  about half of C's, and it was the only runner that never starved a writer.
 - SQLite allows one writer at a time, so write throughput flattens around two
   workers in every language. Its busy timeout is unfair: under contention one
   write waited 1 to 2 seconds while others took microseconds. Sending writes

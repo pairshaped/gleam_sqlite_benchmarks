@@ -1,13 +1,10 @@
-// Go through database/sql and mattn/go-sqlite3, the most common Go SQLite
-// setup. Built with the libsqlite3 tag so it links the shared SQLite instead of
-// the driver's bundled copy. One dedicated connection caches a prepared
-// statement per SQL string, and transactions use BEGIN/COMMIT on that
-// connection, so no pool or per-transaction re-prepare is measured.
+// Go through ncruces/go-sqlite3's direct API, without database/sql and without
+// cgo: its SQLite is compiled to Wasm and translated to Go. It was the fastest
+// Go SQLite library in this benchmark; go/README.md has the comparison. One
+// connection caches a prepared statement per SQL string.
 package main
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"slices"
@@ -16,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/ncruces/go-sqlite3"
 )
 
 const (
@@ -108,32 +105,27 @@ with recursive seed(id) as (values(1) union all select id + 1 from seed where id
 insert into app_discount_items (id, item_id, item_type, discount_id) select id, ((id - 1) % 100) + 1, 'Event', ((id - 1) % 2) + 1 from seed;
 `
 
+const casePrefix = "go_ncruces"
+
 type connection struct {
-	ctx        context.Context
-	db         *sql.DB
-	conn       *sql.Conn
-	statements map[string]*sql.Stmt
+	conn       *sqlite3.Conn
+	statements map[string]*sqlite3.Stmt
 }
 
 func openConnection() *connection {
-	ctx := context.Background()
-	db, err := sql.Open("sqlite3", dbPath)
-	must(err)
-	db.SetMaxOpenConns(1)
-	conn, err := db.Conn(ctx)
+	c, err := sqlite3.Open(dbPath)
 	must(err)
 	// Set the busy timeout before anything that takes a lock, so connections
 	// opened at the same moment wait for each other instead of failing.
+	must(c.BusyTimeout(5 * time.Second))
 	for _, pragma := range []string{
-		"pragma busy_timeout = 5000",
 		"pragma journal_mode = WAL",
 		"pragma synchronous = NORMAL",
 		"pragma foreign_keys = ON",
 	} {
-		_, err := conn.ExecContext(ctx, pragma)
-		must(err)
+		must(c.Exec(pragma))
 	}
-	return &connection{ctx: ctx, db: db, conn: conn, statements: map[string]*sql.Stmt{}}
+	return &connection{conn: c, statements: map[string]*sqlite3.Stmt{}}
 }
 
 func (c *connection) close() {
@@ -141,35 +133,52 @@ func (c *connection) close() {
 		must(statement.Close())
 	}
 	must(c.conn.Close())
-	must(c.db.Close())
 }
 
-func (c *connection) statement(query string) *sql.Stmt {
-	if statement, ok := c.statements[query]; ok {
-		return statement
+func (c *connection) statement(query string, args []any) *sqlite3.Stmt {
+	statement, ok := c.statements[query]
+	if !ok {
+		var err error
+		statement, _, err = c.conn.Prepare(query)
+		must(err)
+		c.statements[query] = statement
 	}
-	statement, err := c.conn.PrepareContext(c.ctx, query)
-	must(err)
-	c.statements[query] = statement
+	for i, arg := range args {
+		switch value := arg.(type) {
+		case int:
+			must(statement.BindInt64(i+1, int64(value)))
+		case int64:
+			must(statement.BindInt64(i+1, value))
+		case string:
+			must(statement.BindText(i+1, value))
+		default:
+			must(fmt.Errorf("unsupported argument %T", arg))
+		}
+	}
 	return statement
 }
 
+// one runs a query that returns a single integer.
 func (c *connection) one(query string, args ...any) int64 {
-	var value int64
-	must(c.statement(query).QueryRowContext(c.ctx, args...).Scan(&value))
+	statement := c.statement(query, args)
+	if !statement.Step() {
+		must(statement.Err())
+		must(fmt.Errorf("no row for %q", query))
+	}
+	value := statement.ColumnInt64(0)
+	must(statement.Reset())
 	return value
 }
 
+// exec runs a statement that returns no rows.
 func (c *connection) exec(query string, args ...any) {
-	_, err := c.statement(query).ExecContext(c.ctx, args...)
-	must(err)
+	must(c.statement(query, args).Exec())
 }
 
 func seedAppRequestData() int64 {
 	c := openConnection()
 	defer c.close()
-	_, err := c.conn.ExecContext(c.ctx, seedSQL)
-	must(err)
+	must(c.conn.Exec(seedSQL))
 	return 100
 }
 
@@ -337,7 +346,7 @@ func runConcurrent(kind workload, workers int, duration, warmup float64) {
 		maxLatency = all[len(all)-1]
 	}
 	// Any failed query stops this runner, so a printed row always has 0 errors.
-	fmt.Printf("go_sqlite/concurrent/%s,%d,%g,%d,%.0f,%d,%d,%d,%d,0\n", kind, workers, duration,
+	fmt.Printf("%s/concurrent/%s,%d,%g,%d,%.0f,%d,%d,%d,%d,0\n", casePrefix, kind, workers, duration,
 		len(all), float64(len(all))/duration, percentile(0.50), percentile(0.95), percentile(0.99),
 		maxLatency)
 }
@@ -384,7 +393,7 @@ func main() {
 	}
 
 	fmt.Println("case,items,micros,us_per_item,check")
-	measure("go_sqlite/app_request/seed_dummy_data", 1, seedAppRequestData)
-	measure("go_sqlite/app_request/admin_item_edit", rows, func() int64 { return adminItemEditRequests(rows) })
-	measure("go_sqlite/app_request/admin_item_update", rows, func() int64 { return adminItemUpdateRequests(rows) })
+	measure(casePrefix+"/app_request/seed_dummy_data", 1, seedAppRequestData)
+	measure(casePrefix+"/app_request/admin_item_edit", rows, func() int64 { return adminItemEditRequests(rows) })
+	measure(casePrefix+"/app_request/admin_item_update", rows, func() int64 { return adminItemUpdateRequests(rows) })
 }

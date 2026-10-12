@@ -63,7 +63,7 @@ def case_rank(case_name, type)
     "rust_rusqlite/app_request/#{type}",
     "rust_rusqlite_query_only/app_request/#{type}",
     "zig_sqlite/app_request/#{type}",
-    "go_sqlite/app_request/#{type}",
+    "go_ncruces/app_request/#{type}",
     "gleam_esqlite/app_request/#{type}",
     "bun_sqlite/app_request/#{type}",
   ]

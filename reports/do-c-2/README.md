@@ -12,10 +12,16 @@
 
 ## Toolchains
 
-All from `flake.nix`: SQLite 3.51.0 (C, Zig, Go, Rust), Rust 1.99.0 with
-rusqlite 0.40.2, Zig 0.16.0, Go 1.26.8 with go-sqlite3 1.14.52, Bun 1.4.3 (its
-embedded SQLite is also 3.51.0), Gleam 1.19.2 on Erlang/OTP 28 with esqlite
-0.9.0 (its bundled SQLite is 3.50.4).
+All from `flake.nix`: SQLite 3.51.0 (C, Zig, Rust), Rust 1.99.0 with
+rusqlite 0.40.2, Zig 0.16.0, Go 1.26.8 with ncruces/go-sqlite3 0.35.6 (its own
+SQLite 3.53.4), Bun 1.4.3 (its embedded SQLite is also 3.51.0), Gleam 1.19.2 on
+Erlang/OTP 28 with esqlite 0.9.0 (its bundled SQLite is 3.50.4).
+
+The Go rows come from a later rerun on the same Droplet, after the Go runner
+switched from `database/sql` with `mattn/go-sqlite3` to `ncruces/go-sqlite3`.
+That rerun repeated C as a reference: 114 µs per read request, the same as the
+main run, and 36 µs per update against 40. Go's ratios below are against the
+rerun's C. [go/README.md](../../go/README.md) compares the Go libraries.
 
 ## Sequential mode
 
@@ -28,7 +34,7 @@ better.
 | Zig | 116 | 1.0x | 38 | 1.0x |
 | Rust (`rusqlite`) | 123 | 1.1x | 43 | 1.1x |
 | Bun | 145 | 1.3x | 51 | 1.3x |
-| Go (`database/sql`) | 225 | 2.0x | 64 | 1.6x |
+| Go (`ncruces/go-sqlite3`) | 195 | 1.7x | 47 | 1.3x |
 | Gleam, default BEAM | 1,147 | 10.0x | 115 | 2.9x |
 | Gleam, `+SDio 2` | 432 | 3.8x | 125 | 3.1x |
 
@@ -43,8 +49,10 @@ What the numbers say:
   spread on the update and about 8% on the read request.
 - Bun adds about 30%, the cost of crossing from JavaScript into native code and
   building JavaScript values for each row.
-- Go doubles the read request. That's `database/sql` and cgo: every query goes
-  through the generic `database/sql` layer and a cgo call.
+- Go adds about 70% to the read request and 30% to the update. Its SQLite is
+  compiled to Wasm and translated to Go, which runs slower than native code,
+  but it avoids cgo, whose fixed cost per call made the other Go libraries
+  slower still.
 - Gleam's read request is dominated by dirty I/O scheduler handoffs. `esqlite`
   runs each SQLite call on a dirty I/O thread, and each handoff to one of the
   BEAM's 10 dirty I/O threads is slow on a 2-vCPU VM. Even the tuned run is
@@ -100,7 +108,7 @@ oversubscribed.
 | Zig | 8,648 | 11,232 | 17,656 | 2.0x |
 | Rust | 8,017 | 9,132 | 16,097 | 2.0x |
 | Bun | 7,285 | 7,732 | 13,594 | 1.9x |
-| Go | 4,588 | 4,774 | 6,198 | 1.4x |
+| Go | 5,021 | 6,047 | 6,010 | 1.2x |
 | Gleam, default BEAM | 754 | 1,099 | 2,474 | 3.3x |
 | Gleam, `+SDio 2` | 2,124 | 2,887 | 4,080 | 1.9x |
 
@@ -112,7 +120,7 @@ oversubscribed.
 | Zig | 25,000 | 35,232 | 35,622 |
 | Rust | 24,248 | 31,110 | 32,615 |
 | Bun | 22,310 | 28,063 | 27,071 |
-| Go | 15,336 | 13,342 | 13,150 |
+| Go | 20,400 | 19,356 | 19,770 |
 | Gleam, default BEAM | 3,230 | 2,076 | 2,177 |
 | Gleam, `+SDio 2` | 9,408 | 6,104 | 0 (12 failed requests) |
 
@@ -128,7 +136,7 @@ SQLite's automatic WAL checkpoint flushing to disk rather than lock contention.
 | Zig | 11,507 | 8,662 | 15,933 |
 | Rust | 11,045 | 7,987 | 14,620 |
 | Bun | 9,416 | 7,422 | 11,452 |
-| Go | 5,481 | 5,321 | 5,390 |
+| Go | 6,033 | 6,924 | 5,566 |
 | Gleam, default BEAM | 948 | 1,204 | 2,869 |
 | Gleam, `+SDio 2` | 2,829 | 3,920 | 1,459 (5 failed requests) |
 
@@ -149,10 +157,10 @@ The full summary, including p99 latency tables, is in
 - Mixed throughput drops from 1 worker to 2 in every native runner and Bun. A
   writer that finds the lock taken sleeps in SQLite's busy timeout, leaving its
   CPU idle; with 4 workers, another worker uses that CPU.
-- Go scales poorly here. Read throughput gains only 1.4x, write throughput
-  falls as workers are added, and p99 latency reaches several milliseconds at 2
-  workers. Every query is a cgo call through `database/sql`, and the runtime
-  has to schedule goroutines around them on two vCPUs.
+- Go's reads stop scaling at about 6,000 requests per second, around a third of
+  C's at 4 workers. Its writes hold steady at about 55% of C's, and it never
+  starved a writer: the longest single write wait at 4 workers was about 120 ms,
+  against over a second for every other runner.
 - Gleam with the default BEAM never failed but stayed far behind. With
   `+SDio 2`, 4 writers stalled: waiting writers held both dirty I/O threads, so
   the writer holding the lock couldn't commit until the 5-second busy timeouts
@@ -167,6 +175,10 @@ The full summary, including p99 latency tables, is in
   sequential mode. The run also produced Gleam probe rows, since removed from
   the runner; they were stripped from these CSVs.
 - [concurrent/](concurrent/): the same for concurrent mode.
+- [go-rerun/](go-rerun/): the Go rerun in both modes, with C as a reference,
+  plus the two Go variants that were later removed (`go` is `database/sql` with
+  `mattn/go-sqlite3`, `go_cgo` the C API called through cgo). The Go rows in
+  the main runs' raw data are `mattn/go-sqlite3`.
 
 The concurrent run used the code in the commit that adds this report. The
 sequential run used an earlier working tree with the same sequential request

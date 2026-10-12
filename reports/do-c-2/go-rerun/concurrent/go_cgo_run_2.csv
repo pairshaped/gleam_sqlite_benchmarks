@@ -1,0 +1,10 @@
+case,workers,seconds,requests,requests_per_second,p50_us,p95_us,p99_us,max_us,errors
+go_cgo/concurrent/read,1,5,34367,6873,125,224,277,761,0
+go_cgo/concurrent/read,2,5,36155,7231,237,342,2600,9286,0
+go_cgo/concurrent/read,4,5,65596,13119,134,236,4923,51694,0
+go_cgo/concurrent/write,1,5,104935,20987,20,41,56,157467,0
+go_cgo/concurrent/write,2,5,121843,24369,33,54,402,235729,0
+go_cgo/concurrent/write,4,5,126097,25219,32,52,188,2040265,0
+go_cgo/concurrent/mixed,1,5,45179,9036,99,181,244,25305,0
+go_cgo/concurrent/mixed,2,5,30221,6044,214,540,3395,72634,0
+go_cgo/concurrent/mixed,4,5,45905,9181,191,1724,5187,497848,0

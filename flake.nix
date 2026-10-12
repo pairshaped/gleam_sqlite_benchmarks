@@ -61,8 +61,8 @@
       rustVersion = "1.99.0";
 
       # Bun 1.4.3 embeds SQLite 3.51.0. Pin the shared SQLite used by the C,
-      # Zig, Go and Rust runners to the same release so they compare like with
-      # like. esqlite bundles its own SQLite (3.50.4) for the Gleam runner.
+      # Zig and Rust runners to the same release so they compare like with
+      # like. esqlite (Gleam) and ncruces/go-sqlite3 (Go) bring their own.
       sqliteVersion = "3.51.0";
       sqliteSource = {
         url = "https://www.sqlite.org/2025/sqlite-autoconf-3510000.tar.gz";
@@ -147,8 +147,9 @@
               (pkgs.rust-bin.stable.${rustVersion}.minimal.override { extensions = [ "rustfmt" ]; })
               pkgs.beamPackages.erlang
               pkgs.beamPackages.rebar3
-              # One shared SQLite for the C, Zig, Go and Rust runners. Bun embeds
-              # its own copy and esqlite bundles another.
+              # One shared SQLite for the C, Zig and Rust runners. Bun embeds its
+              # own copy, Go's ncruces/go-sqlite3 brings another, and esqlite
+              # bundles a third.
               localPackages.sqlite
               pkgs.pkg-config
               pkgs.go
