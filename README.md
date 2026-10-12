@@ -22,11 +22,13 @@ Results live in [REPORT.md](REPORT.md), with one report per machine under
 Laptop runs are fine for checking that the runners build and agree, but
 background apps make their timings unreliable, so they aren't reported.
 
-The CPU behind a cloud VM matters as much as its size. Two DigitalOcean `c-2`
-Droplets on the same plan and price landed on different Intel Xeon generations,
+The hardware behind a cloud VM matters as much as its size. Two 2-vCPU
+DigitalOcean CPU-Optimized Droplets landed on different Intel Xeon generations,
 and the newer one (Platinum 8280) ran SQLite about twice as fast as the older
-one (Platinum 8168). Each report names its CPU; compare reports by each runner's
-ratio to C on the same machine, and check `lscpu` before trusting a new box.
+one (Platinum 8168). The 8280 Droplet may have been on DigitalOcean's Premium
+Intel option, which pairs a newer CPU with NVMe storage; that's unconfirmed.
+Each report names its CPU; compare reports by each runner's ratio to C on the
+same machine, and check `lscpu` before trusting a new box.
 
 ## What runs
 

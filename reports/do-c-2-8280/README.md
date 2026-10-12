@@ -8,11 +8,13 @@
 - OS: Debian 13.7, Linux 6.12, x86_64
 - Background services and timers stopped (see the top-level README)
 
-This Droplet ran SQLite about twice as fast as the same plan on a Xeon Platinum
+This Droplet ran SQLite about twice as fast as the same size on a Xeon Platinum
 8168 ([2-vCPU](../do-c-2-8168/README.md), [4-vCPU](../do-c-4-8168/README.md)):
 C took 56 µs per read request here against 114 µs on the 8168, at the same
-clock speed. Compare reports across CPUs by each runner's ratio to C, not by
-absolute numbers.
+clock speed, and wrote three times as fast. It may have been on DigitalOcean's
+Premium Intel option, which pairs a newer CPU with NVMe storage; that's
+unconfirmed. Compare reports across machines by each runner's ratio to C, not
+by absolute numbers.
 
 ## Toolchains
 

@@ -11,9 +11,10 @@ fair, and the caveats for Gleam and Bun.
 | DigitalOcean CPU-Optimized `c-2` | 2 | Intel Xeon Platinum 8280 | [reports/do-c-2-8280](reports/do-c-2-8280/README.md) |
 
 The two 8168 reports differ only in size, so together they show what more cores
-do. The 8280 ran SQLite about twice as fast as the 8168 at the same clock speed
-and on the same plan, so compare it with the others by each runner's ratio to C
-on the same machine.
+do. The 8280 ran SQLite about twice as fast as the 8168 at the same clock speed,
+so compare it with the others by each runner's ratio to C on the same machine.
+That Droplet may have been on DigitalOcean's Premium Intel option, with NVMe
+storage as well as the newer CPU; that's unconfirmed.
 
 ## One request at a time
 
@@ -100,8 +101,9 @@ measure that case.
 ## Open questions
 
 - Why the 8280 ran SQLite about twice as fast as the 8168 at the same clock
-  speed. Each read transaction takes file locks through system calls, and older
-  CPUs pay more for the Spectre-era mitigations that slow system calls, but
-  that's untested.
+  speed, and writes three times as fast. If that Droplet was on the Premium
+  Intel option, its NVMe storage would explain much of the write gap. The newer
+  CPU may also pay less for the Spectre-era mitigations that slow the system
+  calls behind SQLite's file locks. Neither is tested.
 - How the results change on bare metal with many more cores, where Gleam's
   default 10 dirty I/O threads each get a core of their own.
