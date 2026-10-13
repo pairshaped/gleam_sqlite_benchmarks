@@ -4,7 +4,7 @@ Results come from dedicated cloud VMs only, one report per machine. The
 [README](README.md) explains the workload, how the runners keep the comparison
 fair, and the caveats for Gleam and Bun.
 
-Most results ran on DigitalOcean CPU-Optimized Droplets; one ran on an OVHcloud VPS. DigitalOcean
+Most results ran on DigitalOcean CPU-Optimized Droplets; one ran on an OVHcloud VPS and one on OVHcloud bare metal. DigitalOcean
 assigns the CPU and doesn't let you choose it on this plan, and the CPU it
 assigned changed the results a lot: one Droplet ran SQLite twice as fast as
 another of the same size. Each report names the exact CPU it got. Expect
@@ -18,6 +18,14 @@ better than the absolute numbers.
 | DigitalOcean CPU-Optimized `c-4` (the same Droplet, resized) | 4 | Intel Xeon Platinum 8168 | [reports/do-c-4-8168](reports/do-c-4-8168/README.md) |
 | DigitalOcean CPU-Optimized `c-2` | 2 | Intel Xeon Platinum 8280 | [reports/do-c-2-8280](reports/do-c-2-8280/README.md) |
 | OVHcloud VPS (`vps-2027-model4`) | 8 | KVM-reported Haswell model; physical CPU not visible | [reports/ovh-vps-8](reports/ovh-vps-8/README.md) |
+| OVHcloud bare metal, RISE-S configuration | 8 cores, 16 threads | AMD Ryzen 7 9700X | [reports/dev-box-9700x](reports/dev-box-9700x/README.md) |
+
+The Ryzen 7 9700X bare-metal box is the fastest machine by far: C runs the
+read request in 25 µs, about 4.5 times faster than the OVHcloud VPS, and reads
+peak at about 203,000 requests per second. It was the owner's development box,
+with development services and agents stopped for the run. Its speed also
+exposed write starvation that the slower machines hid: some writes in every
+runner except Go waited out SQLite's 5-second busy timeout and failed.
 
 The OVHcloud VPS reads at about the 8168's speed but commits the update
 transaction almost twice as fast, likely from storage, and it is the only
