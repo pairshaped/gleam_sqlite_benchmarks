@@ -28,7 +28,7 @@ runner except Go waited out SQLite's 5-second busy timeout and failed.
 
 The OVHcloud VPS reads at about the 8168's speed but commits the update
 transaction almost twice as fast, likely from storage, and it is the only
-8-vCPU machine. Its guest only sees a generic Haswell CPU model, so compare it
+8-vCPU VM. Its guest only sees a generic Haswell CPU model, so compare it
 by ratios to C. The comparison tables below cover the DigitalOcean machines;
 its own numbers are in its report.
 
