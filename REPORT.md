@@ -37,7 +37,7 @@ do.
 
 Read request, microseconds and ratio to C on the same machine:
 
-| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
+| Runner | 2 vCPU | 4 vCPU | 8 vCPU | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | C | 126 (1.0x) | 120 (1.0x) | 111 (1.0x) | 25 (1.0x) |
 | Zig | 124 (1.0x) | 120 (1.0x) | 113 (1.0x) | 22 (0.9x) |
@@ -67,7 +67,7 @@ vCPUs (16, one per thread, on the 9700X).
 
 Reads:
 
-| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
+| Runner | 2 vCPU | 4 vCPU | 8 vCPU | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 103% | 90% | 100% |
 | Rust | 81% | 87% | 84% | 99% |
@@ -77,7 +77,7 @@ Reads:
 
 Writes:
 
-| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
+| Runner | 2 vCPU | 4 vCPU | 8 vCPU | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 100% | 97% | 104% |
 | Rust | 92% | 90% | 79% | 87% |
@@ -87,7 +87,7 @@ Writes:
 
 Mixed (every tenth request writes):
 
-| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
+| Runner | 2 vCPU | 4 vCPU | 8 vCPU | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 98% | 94% | 104% |
 | Rust | 90% | 78% | 83% | 99% |
