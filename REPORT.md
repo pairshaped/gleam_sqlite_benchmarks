@@ -4,10 +4,11 @@ Results come from dedicated cloud machines only, one report per machine. The
 [README](README.md) explains the workload, how the runners keep the comparison
 fair, and the caveats for Gleam and Bun.
 
-Most results ran on DigitalOcean CPU-Optimized Droplets; one ran on an OVHcloud VPS and one on OVHcloud bare metal. DigitalOcean
-assigns the CPU and doesn't let you choose it on this plan, and the CPU it
-assigned changed the results a lot: one Droplet ran SQLite twice as fast as
-another of the same size. Each report names the exact CPU it got. Expect
+Most results ran on DigitalOcean CPU-Optimized Droplets; one ran on an
+OVHcloud VPS and one on OVHcloud bare metal. DigitalOcean assigns the CPU and
+doesn't let you choose it on this plan, and the CPU it assigned changed the
+results a lot: one Droplet ran SQLite twice as fast as another of the same
+size. Each report names the CPU it got, where the machine shows it. Expect
 different numbers on other hardware, on a future Droplet of the same plan, or
 with other providers; the ratios between languages on the same machine travel
 better than the absolute numbers.
@@ -100,7 +101,9 @@ Mixed (every tenth request writes):
 | Go | 81% | 56% | 56% | 64% | 54% |
 | Gleam, default BEAM | 27% | 22% | 12% | 20% | stalled |
 
-- Zig matches C. Rust and Bun scale like C, keeping a roughly steady gap.
+- Zig matches C. Rust and Bun scale like C with a roughly steady gap on the
+  VMs, and caught up with it on the 9700X: 99% and 104% of C's reads at 16
+  workers.
 - Go's reads plateau early: about 6,100 requests per second on the 2-vCPU 8168,
   11,500 on the 4-vCPU 8168, 8,800 on the 8280, 25,600 on the OVH VPS and
   80,000 on the 9700X, whatever the worker count.
@@ -121,9 +124,10 @@ Mixed (every tenth request writes):
 - Bun's synchronous `bun:sqlite` means a write waiting on the lock blocks its
   whole JavaScript thread. The benchmark's worker threads hide that; a server
   has to plan around it with a single writer.
-- On every 2-vCPU Droplet, two workers barely beat one on reads, in every
-  language. The 4-vCPU 8168 Droplet scaled cleanly at 2 workers, which points
-  to how a 2-vCPU Droplet's vCPUs map to physical cores rather than to SQLite.
+- On every machine except the 4-vCPU 8168, two workers barely beat one on
+  reads, then four jumped ahead. That includes the 8-vCPU OVH VPS and the
+  bare-metal 9700X, so it isn't just how a 2-vCPU Droplet's vCPUs map to
+  physical cores. See the open questions.
 
 ## What it means
 
@@ -156,7 +160,11 @@ measure that case.
   Intel option, its NVMe storage would explain much of the write gap. The newer
   CPU may also pay less for the Spectre-era mitigations that slow the system
   calls behind SQLite's file locks. Neither is tested.
-- Why the 9700X ran Bun and Gleam so close to C, and why going from 1 worker
-  to 2 there gained far more than the extra core explains. Default CPU
-  frequency scaling, keeping a single busy thread below full boost, is the
-  likely cause of the second; neither is tested.
+- Why the 9700X ran Bun and Gleam so close to C.
+- Why two workers gain so little over one on most machines and four gain so
+  much. On the 9700X, default CPU frequency scaling keeping a single busy
+  thread below full boost is a likely cause; it doesn't explain the VMs.
+- Why Go's `ncruces/go-sqlite3` commits faster than C on the 9700X (the update
+  takes 15 µs against 19), when it trails C everywhere else. It brings its own
+  SQLite build and file layer, so it may flush or checkpoint differently;
+  comparing compile options and counting disk flushes would tell.
