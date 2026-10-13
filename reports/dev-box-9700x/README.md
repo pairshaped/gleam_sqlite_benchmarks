@@ -4,10 +4,6 @@ An OVHcloud dedicated server in Beauharnois (BHS), in the same configuration as
 OVH's RISE-S plan. It is the first bare-metal report and the only one with
 dedicated physical cores.
 
-It is also the owner's development box, so this run is less isolated than the
-throwaway VMs: development services, agent sessions and their hub were stopped
-for it, but the host kept its usual NixOS system services.
-
 ## Machine
 
 - Hardware: AMD Ryzen 7 9700X (8 Zen 5 cores, 16 threads), 64 GB DDR5 (62 GB
