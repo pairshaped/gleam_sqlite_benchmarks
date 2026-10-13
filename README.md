@@ -18,7 +18,8 @@ production admin app: many small indexed reads, a recursive parent lookup and a
 short save transaction.
 
 Results live in [REPORT.md](REPORT.md), with one report per machine under
-[reports/](reports/). Every published number comes from a dedicated cloud VM.
+[reports/](reports/). Every published number comes from a dedicated cloud VM or
+server.
 Laptop runs are fine for checking that the runners build and agree, but
 background apps make their timings unreliable, so they aren't reported.
 
@@ -27,8 +28,9 @@ DigitalOcean CPU-Optimized Droplets landed on different Intel Xeon generations,
 and the newer one (Platinum 8280) ran SQLite about twice as fast as the older
 one (Platinum 8168). The 8280 Droplet may have been on DigitalOcean's Premium
 Intel option, which pairs a newer CPU with NVMe storage; that's unconfirmed.
-Each report names its CPU; compare reports by each runner's ratio to C on the
-same machine, and check `lscpu` before trusting a new box.
+Each report names its CPU where the machine shows it (a VM may only see a
+generic model); compare reports by each runner's ratio to C on the same
+machine, and check `lscpu` before trusting a new box.
 
 ## What runs
 
