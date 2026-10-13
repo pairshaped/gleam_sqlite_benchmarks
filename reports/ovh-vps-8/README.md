@@ -94,7 +94,7 @@ The full summary, including p99 and maximum latency tables, is in
   workers. At 8 workers, Zig runs at 90% of C, Rust 84%, Bun 79%, Go 48% and
   Gleam 13% to 14%.
 - 2 workers gained little over 1 for every runner except Go, then 4 workers
-  jumped. The same pattern showed on the 2-vCPU Droplets, so it may come from
+  jumped. The same pattern showed on the 2-vCPU Droplet, so it may come from
   how the hypervisor places the first two busy vCPUs.
 - Writes stay flat at every worker count, as SQLite allows one writer at a
   time. C holds about 40,000 writes per second. The longest single write wait

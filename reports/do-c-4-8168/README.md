@@ -91,8 +91,8 @@ The full summary, including p99 latency tables, is in
 ### What the concurrent numbers say
 
 - Reads scale cleanly. C reaches 2.2x at 2 workers and 3.0x at 4, the extra
-  above 2x presumably from hyperthreading. Both 2-vCPU Droplets' weak 2-worker
-  results didn't reproduce here, which points to how a 2-vCPU Droplet's vCPUs
+  above 2x presumably from hyperthreading. The 2-vCPU Droplet's weak 2-worker
+  result didn't reproduce here, which points to how a 2-vCPU Droplet's vCPUs
   map to physical cores rather than to SQLite.
 - Zig matches C throughout. Rust reaches about 90% of C's throughput at 8
   workers and Bun about 80%, so both keep a steady gap as workers are added.

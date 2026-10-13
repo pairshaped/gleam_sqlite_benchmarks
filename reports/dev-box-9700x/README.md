@@ -32,8 +32,8 @@ better.
 | Gleam, default BEAM | 65 | 2.6x | 33 | 1.7x |
 | Gleam, `+SDio 16` | 65 | 2.6x | 33 | 1.7x |
 
-- The read request takes 25 µs for C, against 111 µs on the OVHcloud VPS and
-  56 µs on the DigitalOcean Platinum 8280: about 4.5 times faster than the VPS.
+- The read request takes 25 µs for C, against 111 µs on the OVHcloud VPS:
+  about 4.5 times faster.
 - The update transaction gains much less, 19 µs against the VPS's 23 µs. It
   commits a transaction, and its time is mostly SQLite's WAL bookkeeping and
   checkpoint flushes to disk rather than CPU work.

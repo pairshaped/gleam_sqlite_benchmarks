@@ -23,12 +23,9 @@ server.
 Laptop runs are fine for checking that the runners build and agree, but
 background apps make their timings unreliable, so they aren't reported.
 
-The hardware behind a cloud VM matters as much as its size. Two 2-vCPU
-DigitalOcean CPU-Optimized Droplets landed on different Intel Xeon generations,
-and the newer one (Platinum 8280) ran SQLite about twice as fast as the older
-one (Platinum 8168). The 8280 Droplet may have been on DigitalOcean's Premium
-Intel option, which pairs a newer CPU with NVMe storage; that's unconfirmed.
-Each report names its CPU where the machine shows it (a VM may only see a
+The hardware behind a cloud VM matters as much as its size. Most plans don't
+let you choose the CPU, so two VMs of the same size can land on different
+hardware generations with very different SQLite speed. Each report names its CPU where the machine shows it (a VM may only see a
 generic model); compare reports by each runner's ratio to C on the same
 machine, and check `lscpu` before trusting a new box.
 
@@ -167,9 +164,8 @@ So the Gleam runner runs twice:
 - `gleam_sqlite` uses the BEAM defaults. This is what an app gets unless
   someone tunes it, and it's the row to compare against the other languages.
 - `gleam_sqlite_sdio` sets `+SDio` to the machine's CPU count. On that 8168
-  Droplet it held runs at 423 to 435 µs, but it didn't help on two other 2-vCPU
-  Droplets, one with the same CPU and one with a Xeon Platinum 8280: both rows
-  stayed inconsistent there. Treat the cap as something to measure on your own
+  Droplet it held runs at 423 to 435 µs, but it didn't help on another 2-vCPU
+  Droplet with the same CPU: both rows stayed inconsistent there. Treat the cap as something to measure on your own
   hardware rather than a fix. On a machine with 10 or more CPUs the two rows
   should match, because the default already fits.
 

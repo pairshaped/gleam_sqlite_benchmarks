@@ -2,8 +2,7 @@
 
 The same plan and CPU as the [4-vCPU report](../do-c-4-8168/README.md), so the two
 reports show what more cores do. That 4-vCPU Droplet started as an earlier 2-vCPU
-8168 Droplet; this run replaced the earlier one's report. A 2-vCPU Droplet with a
-faster CPU has its own [report](../do-c-2-8280/README.md).
+8168 Droplet; this run replaced the earlier one's report.
 
 ## Machine
 

@@ -1,4 +1,0 @@
-case,items,micros,us_per_item,check
-go_ncruces/app_request/seed_dummy_data,1,10493,10493,100
-go_ncruces/app_request/admin_item_edit,10000,1249568,124,27395000
-go_ncruces/app_request/admin_item_update,10000,256692,25,5550000
