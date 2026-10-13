@@ -67,7 +67,7 @@ vCPUs (16, one per thread, on the 9700X).
 
 Reads:
 
-| Runner | 8168, 2 | 8168, 4 | OVH VPS, 8 | 9700X, 16 |
+| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 103% | 90% | 100% |
 | Rust | 81% | 87% | 84% | 99% |
@@ -77,7 +77,7 @@ Reads:
 
 Writes:
 
-| Runner | 8168, 2 | 8168, 4 | OVH VPS, 8 | 9700X, 16 |
+| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 100% | 97% | 104% |
 | Rust | 92% | 90% | 79% | 87% |
@@ -87,7 +87,7 @@ Writes:
 
 Mixed (every tenth request writes):
 
-| Runner | 8168, 2 | 8168, 4 | OVH VPS, 8 | 9700X, 16 |
+| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | Zig | 99% | 98% | 94% | 104% |
 | Rust | 90% | 78% | 83% | 99% |
