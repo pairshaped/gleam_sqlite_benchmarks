@@ -297,10 +297,16 @@ fn editRequest(conn: *Connection, event_id: i64) i64 {
 
 /// `begin` is `.begin` for the sequential case and `.begin_immediate` when
 /// several workers write at once (see runConcurrent).
-fn updateRequest(conn: *Connection, begin: Statement, sequence: i64, event_id: i64) i64 {
+/// Returns null when the busy timeout expired before the write lock was free,
+/// which only BEGIN IMMEDIATE can do; any other failure stops the runner.
+fn updateRequest(conn: *Connection, begin: Statement, sequence: i64, event_id: i64) ?i64 {
     var check_sum: i64 = 0;
     var name: [64]u8 = undefined;
-    conn.run(conn.get(begin));
+    const begin_statement = conn.get(begin);
+    const rc = c.sqlite3_step(begin_statement);
+    _ = c.sqlite3_reset(begin_statement);
+    if (rc == c.SQLITE_BUSY) return null;
+    if (rc != c.SQLITE_DONE) fail(conn.db, "begin");
     for (update_queries) |query| check_sum += conn.one(query, event_id);
     const length = c.snprintf(&name, name.len, "Updated Event %lld", @as(c_longlong, sequence));
     const update = conn.get(.update_event);
@@ -330,7 +336,7 @@ fn adminItemUpdateRequests(rows: i64) i64 {
 
     var check_sum: i64 = 0;
     var i: i64 = 1;
-    while (i <= rows) : (i += 1) check_sum += updateRequest(&conn, .begin, i, @mod(i - 1, 100) + 1);
+    while (i <= rows) : (i += 1) check_sum += updateRequest(&conn, .begin, i, @mod(i - 1, 100) + 1) orelse fail(conn.db, "begin");
     return check_sum;
 }
 
@@ -362,6 +368,7 @@ const Worker = struct {
     latencies: [*]i64 = undefined,
     count: usize = 0,
     capacity: usize = 0,
+    errors: i64 = 0,
 
     fn record(self: *Worker, latency: i64) void {
         if (self.count == self.capacity) {
@@ -400,7 +407,11 @@ fn runWorker(worker: *Worker) void {
             .mixed => @mod(sequence, 10) == 0,
         };
         if (write) {
-            _ = updateRequest(&conn, .begin_immediate, sequence, event_id);
+            if (updateRequest(&conn, .begin_immediate, sequence, event_id) == null) {
+                // Count timeouts during warm-up too, as the Gleam runner does.
+                worker.errors += 1;
+                continue;
+            }
         } else {
             _ = editRequest(&conn, event_id);
         }
@@ -425,9 +436,11 @@ fn runConcurrent(workload: Workload, count: usize, duration: f64, warmup: f64) v
     workers_go.store(true, .release);
 
     var total: usize = 0;
+    var errors: i64 = 0;
     for (0..count) |i| {
         threads[i].join();
         total += state[i].count;
+        errors += state[i].errors;
     }
     const all_raw = c.malloc(@max(total, 1) * @sizeOf(i64)) orelse fail(null, "malloc");
     const all: [*]i64 = @ptrCast(@alignCast(all_raw));
@@ -446,8 +459,8 @@ fn runConcurrent(workload: Workload, count: usize, duration: f64, warmup: f64) v
         }
     }.at;
     const max: i64 = if (total == 0) 0 else sorted[total - 1];
-    // Any failed query stops this runner, so a printed row always has 0 errors.
-    _ = c.printf("zig_sqlite/concurrent/%s,%d,%g,%zu,%.0f,%lld,%lld,%lld,%lld,0\n", @tagName(workload).ptr, @as(c_int, @intCast(count)), duration, total, @as(f64, @floatFromInt(total)) / duration, @as(c_longlong, percentile(sorted, 0.50)), @as(c_longlong, percentile(sorted, 0.95)), @as(c_longlong, percentile(sorted, 0.99)), @as(c_longlong, max));
+    // Errors are writes whose busy timeout expired; anything else stops the runner.
+    _ = c.printf("zig_sqlite/concurrent/%s,%d,%g,%zu,%.0f,%lld,%lld,%lld,%lld,%lld\n", @tagName(workload).ptr, @as(c_int, @intCast(count)), duration, total, @as(f64, @floatFromInt(total)) / duration, @as(c_longlong, percentile(sorted, 0.50)), @as(c_longlong, percentile(sorted, 0.95)), @as(c_longlong, percentile(sorted, 0.99)), @as(c_longlong, max), @as(c_longlong, errors));
     _ = c.fflush(null);
     c.free(all_raw);
 }

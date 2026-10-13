@@ -465,6 +465,13 @@ fn concurrent_main(args: &[String]) -> BenchResult<()> {
     Ok(())
 }
 
+fn is_busy(error: &(dyn Error + Send + Sync + 'static)) -> bool {
+    error
+        .downcast_ref::<rusqlite::Error>()
+        .and_then(rusqlite::Error::sqlite_error_code)
+        == Some(rusqlite::ErrorCode::DatabaseBusy)
+}
+
 fn run_concurrent(
     workload: Workload,
     workers: usize,
@@ -475,17 +482,18 @@ fn run_concurrent(
     let go = Barrier::new(workers + 1);
     let deadlines: OnceLock<(Instant, Instant)> = OnceLock::new();
 
-    let latencies = thread::scope(|scope| -> BenchResult<Vec<u64>> {
+    let (latencies, errors) = thread::scope(|scope| -> BenchResult<(Vec<u64>, u64)> {
         let handles: Vec<_> = (0..workers)
             .map(|index| {
                 let (ready, go, deadlines) = (&ready, &go, &deadlines);
-                scope.spawn(move || -> BenchResult<Vec<u64>> {
+                scope.spawn(move || -> BenchResult<(Vec<u64>, u64)> {
                     let conn = open_rusqlite_connection()?;
                     ready.wait();
                     go.wait();
                     let (warm_until, measure_until) = *deadlines.get().expect("deadlines set");
 
                     let mut latencies = Vec::with_capacity(65_536);
+                    let mut errors = 0;
                     // Offset each worker's event ids so workers don't all hit the same rows.
                     let mut sequence = index as i64 * 37;
                     loop {
@@ -501,12 +509,22 @@ fn run_concurrent(
                             Workload::Mixed => sequence % 10 == 0,
                         };
                         if write {
-                            admin_item_update_request_rusqlite(
+                            match admin_item_update_request_rusqlite(
                                 &conn,
                                 "begin immediate",
                                 sequence,
                                 event_id,
-                            )?;
+                            ) {
+                                Ok(_) => {}
+                                // The busy timeout expired before the write lock
+                                // was free. Count it, during warm-up too, as the
+                                // Gleam runner does; anything else stops the run.
+                                Err(error) if is_busy(error.as_ref()) => {
+                                    errors += 1;
+                                    continue;
+                                }
+                                Err(error) => return Err(error),
+                            }
                         } else {
                             admin_item_edit_request_rusqlite(&conn, event_id)?;
                         }
@@ -514,7 +532,7 @@ fn run_concurrent(
                             latencies.push(start.elapsed().as_micros() as u64);
                         }
                     }
-                    Ok(latencies)
+                    Ok((latencies, errors))
                 })
             })
             .collect();
@@ -527,10 +545,13 @@ fn run_concurrent(
         go.wait();
 
         let mut all = Vec::new();
+        let mut errors = 0;
         for handle in handles {
-            all.extend(handle.join().expect("worker panicked")?);
+            let (latencies, worker_errors) = handle.join().expect("worker panicked")?;
+            all.extend(latencies);
+            errors += worker_errors;
         }
-        Ok(all)
+        Ok((all, errors))
     })?;
 
     let mut latencies = latencies;
@@ -543,9 +564,9 @@ fn run_concurrent(
         }
     };
     let total = latencies.len();
-    // Any failed query stops this runner, so a printed row always has 0 errors.
+    // Errors are writes whose busy timeout expired; anything else stops the runner.
     println!(
-        "rust_rusqlite/concurrent/{},{workers},{duration},{total},{:.0},{},{},{},{},0",
+        "rust_rusqlite/concurrent/{},{workers},{duration},{total},{:.0},{},{},{},{},{errors}",
         workload.name(),
         total as f64 / duration,
         percentile(0.50),

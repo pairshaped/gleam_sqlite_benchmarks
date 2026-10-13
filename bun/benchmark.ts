@@ -341,6 +341,7 @@ function runWorker({ workload, index, deadlines }: WorkerData) {
   const [warmUntil, measureUntil] = shared;
 
   const latencies: number[] = [];
+  let errors = 0;
   // Offset each worker's event ids so workers don't all hit the same rows.
   let sequence = index * 37;
   for (;;) {
@@ -351,7 +352,15 @@ function runWorker({ workload, index, deadlines }: WorkerData) {
     const write =
       workload === "write" || (workload === "mixed" && sequence % 10 === 0);
     if (write) {
-      update.immediate(sequence, eventId);
+      try {
+        update.immediate(sequence, eventId);
+      } catch (error) {
+        // The busy timeout expired before the write lock was free. Count it,
+        // during warm-up too, as the Gleam runner does; anything else stops.
+        if ((error as { code?: string }).code !== "SQLITE_BUSY") throw error;
+        errors++;
+        continue;
+      }
     } else {
       adminItemEditRequest(one, eventId);
     }
@@ -359,7 +368,7 @@ function runWorker({ workload, index, deadlines }: WorkerData) {
   }
   db.close();
   const result = Float64Array.from(latencies);
-  parentPort!.postMessage(result, [result.buffer]);
+  parentPort!.postMessage({ latencies: result, errors }, [result.buffer]);
 }
 
 async function runConcurrent(
@@ -400,9 +409,12 @@ async function runConcurrent(
   shared[0] = warmUntil;
   shared[1] = warmUntil + duration * 1000;
 
-  const results = (await Promise.all(
-    messages.map((next) => next()),
-  )) as Float64Array[];
+  const outcomes = (await Promise.all(messages.map((next) => next()))) as {
+    latencies: Float64Array;
+    errors: number;
+  }[];
+  const results = outcomes.map((outcome) => outcome.latencies);
+  const errors = outcomes.reduce((sum, outcome) => sum + outcome.errors, 0);
   await Promise.all(workers.map((worker) => worker.terminate()));
 
   const all = new Float64Array(results.reduce((sum, r) => sum + r.length, 0));
@@ -415,9 +427,9 @@ async function runConcurrent(
   const percentile = (p: number) =>
     all.length === 0 ? 0 : all[Math.floor((all.length - 1) * p)];
   const max = all.length === 0 ? 0 : all[all.length - 1];
-  // Any failed query stops this runner, so a printed row always has 0 errors.
+  // Errors are writes whose busy timeout expired; anything else stops the runner.
   console.log(
-    `bun_sqlite/concurrent/${workload},${count},${duration},${all.length},${Math.round(all.length / duration)},${percentile(0.5)},${percentile(0.95)},${percentile(0.99)},${max},0`,
+    `bun_sqlite/concurrent/${workload},${count},${duration},${all.length},${Math.round(all.length / duration)},${percentile(0.5)},${percentile(0.95)},${percentile(0.99)},${max},${errors}`,
   );
 }
 

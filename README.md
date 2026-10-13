@@ -96,8 +96,10 @@ Read the write rows with two SQLite behaviours in mind:
   That hides above the 99th percentile, which is why the output includes the
   maximum. Part of the maximum is also SQLite's automatic WAL checkpoint, which
   flushes to disk every 1,000 pages and can take tens of milliseconds on a VM
-  even with a single writer. An app that sends all writes through one writer,
-  queuing them itself, avoids the starvation.
+  even with a single writer. On a fast enough machine, an unlucky writer waits
+  out the whole 5-second busy timeout and fails. Every runner counts those
+  failed writes in the `errors` column instead of stopping. An app that sends
+  all writes through one writer, queuing them itself, avoids the starvation.
 
 The checksum doesn't apply here, because readers see counters that writers keep
 changing. Instead, any failed query stops the run.

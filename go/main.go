@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -235,16 +236,27 @@ func adminItemUpdateRequests(rows int64) int64 {
 
 	var check int64
 	for i := int64(1); i <= rows; i++ {
-		check += adminItemUpdateRequest(c, "begin", i, ((i-1)%100)+1)
+		value, ok := adminItemUpdateRequest(c, "begin", i, ((i-1)%100)+1)
+		if !ok {
+			must(errors.New("begin: database is locked"))
+		}
+		check += value
 	}
 	return check
 }
 
 // begin is "begin" for the sequential case and "begin immediate" when several
-// workers write at once (see runConcurrent).
-func adminItemUpdateRequest(c *connection, begin string, sequence, eventID int64) int64 {
+// workers write at once (see runConcurrent). It returns false when the busy
+// timeout expired before the write lock was free, which only BEGIN IMMEDIATE
+// can do; any other failure stops the runner.
+func adminItemUpdateRequest(c *connection, begin string, sequence, eventID int64) (int64, bool) {
 	var check int64
-	c.exec(begin)
+	if err := c.statement(begin, nil).Exec(); err != nil {
+		if errors.Is(err, sqlite3.BUSY) {
+			return 0, false
+		}
+		must(err)
+	}
 	check += c.one("select id from app_users where id = ?", 1)
 	check += c.one("select id from app_clubs where subdomain = ?", "demo")
 	check += c.one("select id from app_events where club_id = ? and id = ?", 418, eventID)
@@ -253,7 +265,7 @@ func adminItemUpdateRequest(c *connection, begin string, sequence, eventID int64
 	check += c.one("select count(*) from app_tags where club_id = ?", 418)
 	c.exec("update app_events set counter = counter + 1, name = ? where id = ?", "Updated Event "+strconv.FormatInt(sequence, 10), eventID)
 	c.exec("commit")
-	return check + eventID
+	return check + eventID, true
 }
 
 func measure(name string, items int64, work func() int64) {
@@ -292,6 +304,7 @@ func runConcurrent(kind workload, workers int, duration, warmup float64) {
 	start := make(chan struct{})
 	var warmUntil, measureUntil time.Time
 	results := make([][]int64, workers)
+	failures := make([]int64, workers)
 
 	ready.Add(workers)
 	done.Add(workers)
@@ -315,7 +328,11 @@ func runConcurrent(kind workload, workers int, duration, warmup float64) {
 				eventID := ((sequence - 1) % 100) + 1
 				write := kind == writeWorkload || (kind == mixedWorkload && sequence%10 == 0)
 				if write {
-					adminItemUpdateRequest(c, "begin immediate", sequence, eventID)
+					if _, ok := adminItemUpdateRequest(c, "begin immediate", sequence, eventID); !ok {
+						// Count timeouts during warm-up too, as the Gleam runner does.
+						failures[index]++
+						continue
+					}
 				} else {
 					adminItemEditRequest(c, eventID)
 				}
@@ -345,10 +362,14 @@ func runConcurrent(kind workload, workers int, duration, warmup float64) {
 	if len(all) > 0 {
 		maxLatency = all[len(all)-1]
 	}
-	// Any failed query stops this runner, so a printed row always has 0 errors.
-	fmt.Printf("%s/concurrent/%s,%d,%g,%d,%.0f,%d,%d,%d,%d,0\n", casePrefix, kind, workers, duration,
+	var errorCount int64
+	for _, count := range failures {
+		errorCount += count
+	}
+	// Errors are writes whose busy timeout expired; anything else stops the runner.
+	fmt.Printf("%s/concurrent/%s,%d,%g,%d,%.0f,%d,%d,%d,%d,%d\n", casePrefix, kind, workers, duration,
 		len(all), float64(len(all))/duration, percentile(0.50), percentile(0.95), percentile(0.99),
-		maxLatency)
+		maxLatency, errorCount)
 }
 
 // Usage: benchmark concurrent <duration seconds> <warmup seconds> <workers,...>

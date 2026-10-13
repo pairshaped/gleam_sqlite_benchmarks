@@ -312,12 +312,17 @@ static sqlite3_int64 edit_request(sqlite3 *db, sqlite3_stmt *statements[],
 }
 
 // `begin` is S_BEGIN for the sequential cases and S_BEGIN_IMMEDIATE when
-// several workers write at once (see run_concurrent).
-static sqlite3_int64 update_request(sqlite3 *db, sqlite3_stmt *statements[], int begin,
-                                    sqlite3_int64 sequence, sqlite3_int64 event_id) {
+// several workers write at once (see run_concurrent). Returns 0 when the busy
+// timeout expired before the write lock was free, which only BEGIN IMMEDIATE
+// can do; any other failure stops the runner.
+static int update_request(sqlite3 *db, sqlite3_stmt *statements[], int begin,
+                          sqlite3_int64 sequence, sqlite3_int64 event_id, sqlite3_int64 *out) {
     char name[64];
     sqlite3_int64 check = 0;
-    run(db, statements[begin]);
+    int rc = sqlite3_step(statements[begin]);
+    sqlite3_reset(statements[begin]);
+    if (rc == SQLITE_BUSY) return 0;
+    if (rc != SQLITE_DONE) die(db, sqlite3_sql(statements[begin]));
     for (size_t q = 0; q < LENGTH(UPDATE_QUERIES); q++) {
         check += one(db, statements, &UPDATE_QUERIES[q], event_id);
     }
@@ -328,7 +333,8 @@ static sqlite3_int64 update_request(sqlite3 *db, sqlite3_stmt *statements[], int
     check_rc(db, sqlite3_bind_int64(update, 2, event_id), "bind");
     run(db, update);
     run(db, statements[S_COMMIT]);
-    return check + event_id;
+    *out = check + event_id;
+    return 1;
 }
 
 static sqlite3_int64 admin_item_edit_requests(sqlite3_int64 rows) {
@@ -353,7 +359,11 @@ static sqlite3_int64 admin_item_update_requests(sqlite3_int64 rows) {
 
     sqlite3_int64 check = 0;
     for (sqlite3_int64 i = 1; i <= rows; i++) {
-        check += update_request(db, statements, S_BEGIN, i, ((i - 1) % 100) + 1);
+        sqlite3_int64 value;
+        if (!update_request(db, statements, S_BEGIN, i, ((i - 1) % 100) + 1, &value)) {
+            die(db, "begin");
+        }
+        check += value;
     }
 
     finalize_all(statements);
@@ -399,6 +409,7 @@ typedef struct {
     long long *latencies;
     size_t count;
     size_t capacity;
+    long long errors;
 } Worker;
 
 static atomic_int workers_ready;
@@ -435,7 +446,12 @@ static void *run_worker(void *argument) {
         int write = worker->workload == W_WRITE ||
                     (worker->workload == W_MIXED && sequence % 10 == 0);
         if (write) {
-            update_request(db, statements, S_BEGIN_IMMEDIATE, sequence, event_id);
+            sqlite3_int64 value;
+            if (!update_request(db, statements, S_BEGIN_IMMEDIATE, sequence, event_id, &value)) {
+                // Count timeouts during warm-up too, as the Gleam runner does.
+                worker->errors++;
+                continue;
+            }
         } else {
             edit_request(db, statements, event_id);
         }
@@ -469,9 +485,11 @@ static void run_concurrent(Workload workload, int workers, double duration, doub
     atomic_store_explicit(&workers_go, 1, memory_order_release);
 
     size_t total = 0;
+    long long errors = 0;
     for (int i = 0; i < workers; i++) {
         pthread_join(threads[i], NULL);
         total += state[i].count;
+        errors += state[i].errors;
     }
     long long *all = malloc((total ? total : 1) * sizeof(long long));
     if (!all) die(NULL, "malloc");
@@ -488,10 +506,10 @@ static void run_concurrent(Workload workload, int workers, double duration, doub
     long long max = total ? all[total - 1] : 0;
     free(all);
 
-    // Any failed query stops this runner, so a printed row always has 0 errors.
-    printf("c_sqlite/concurrent/%s,%d,%g,%zu,%.0f,%lld,%lld,%lld,%lld,0\n",
+    // Errors are writes whose busy timeout expired; anything else stops the runner.
+    printf("c_sqlite/concurrent/%s,%d,%g,%zu,%.0f,%lld,%lld,%lld,%lld,%lld\n",
            WORKLOAD_NAMES[workload], workers, duration, total, total / duration, p50, p95, p99,
-           max);
+           max, errors);
     fflush(stdout);
 }
 

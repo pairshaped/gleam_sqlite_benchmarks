@@ -383,10 +383,10 @@ concurrent_worker(Coordinator, Path, Workload, Index) ->
     Coordinator ! {latencies, self(), Latencies, Errors}.
 
 %% A request that fails, in practice a write whose busy timeout expired, counts
-%% as an error instead of stopping the run. Other runners never hit this: their
-%% lock waits sleep on their own OS threads. Here every lock wait sleeps on a
-%% dirty I/O scheduler thread, and once waiting writers occupy all of them, the
-%% writer holding the lock can't run its COMMIT until the timeouts expire.
+%% as an error instead of stopping the run, as in every runner. Here it happens
+%% far sooner: every lock wait sleeps on a dirty I/O scheduler thread, and once
+%% waiting writers occupy all of them, the writer holding the lock can't run its
+%% COMMIT until the timeouts expire.
 concurrent_loop(Connection, Workload, Sequence0, WarmUntil, MeasureUntil, Acc, Errors) ->
     Start = erlang:monotonic_time(microsecond),
     case Start >= MeasureUntil of
