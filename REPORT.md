@@ -22,8 +22,7 @@ better than the absolute numbers.
 
 The Ryzen 7 9700X bare-metal box is the fastest machine by far: C runs the
 read request in 25 µs, about 4.5 times faster than the OVHcloud VPS, and reads
-peak at about 203,000 requests per second. It was the owner's development box,
-with development services and agents stopped for the run. Its speed also
+peak at about 203,000 requests per second. Its speed also
 exposed write starvation that the slower machines hid: some writes in every
 runner except Go waited out SQLite's 5-second busy timeout and failed.
 

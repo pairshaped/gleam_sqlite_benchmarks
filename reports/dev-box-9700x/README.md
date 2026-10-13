@@ -12,16 +12,10 @@ dedicated physical cores.
 - CPU frequency scaling left at the defaults (`amd-pstate-epp`, `powersave`
   governor, `balance_performance`), so cores ramp up under load rather than
   sitting at full boost
-- Stopped for the run: the agent hub and its sessions, a Rails app and its
-  PostgreSQL, `atop` and its process accounting, local HTTPS previews and two
-  timers. Still running: SSH, Tailscale, Caddy (idle), journald, fail2ban and
-  disk monitoring.
 
 ## Toolchains
 
 All from `flake.nix` at `6c6299a`, the same toolchains as the earlier reports.
-This is the first run after every runner started counting expired busy
-timeouts as errors (see the top-level README).
 
 ## Sequential mode
 
