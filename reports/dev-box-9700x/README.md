@@ -16,7 +16,6 @@ dedicated physical cores.
   PostgreSQL, `atop` and its process accounting, local HTTPS previews and two
   timers. Still running: SSH, Tailscale, Caddy (idle), journald, fail2ban and
   disk monitoring.
-- No CPU steal: this machine has no other tenants
 
 ## Toolchains
 
