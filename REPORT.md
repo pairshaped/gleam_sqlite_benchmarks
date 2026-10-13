@@ -37,7 +37,7 @@ do.
 
 Read request, microseconds and ratio to C on the same machine:
 
-| Runner | 8168, 2 vCPUs | 8168, 4 vCPUs | OVH VPS, 8 vCPUs | 9700X, bare metal |
+| Runner | 2 vCPUs | 4 vCPUs | 8 vCPUs | Metal |
 | --- | ---: | ---: | ---: | ---: |
 | C | 126 (1.0x) | 120 (1.0x) | 111 (1.0x) | 25 (1.0x) |
 | Zig | 124 (1.0x) | 120 (1.0x) | 113 (1.0x) | 22 (0.9x) |
